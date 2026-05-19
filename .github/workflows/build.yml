@@ -48,25 +48,33 @@ jobs:
             libgl1-mesa-dev
 
       # -------------------------------------------------------------------
-      # raylib - use actions/checkout to get the source (most reliable)
+      # raylib – build from source using codeload (most reliable method)
+      # codeload.github.com is a separate endpoint for tarballs
+      # It works for ALL public repos without authentication
       # -------------------------------------------------------------------
-      - name: Try installing raylib from package
-        id: raylib_pkg
-        continue-on-error: true
-        run: sudo apt-get install -y libraylib-dev
-
-      - name: Checkout raylib source
-        if: steps.raylib_pkg.outcome == 'failure'
-        uses: actions/checkout@v4
-        with:
-          repository: raysan/raylib
-          ref: '5.5'
-          path: _raylib
-
-      - name: Build and install raylib
-        if: steps.raylib_pkg.outcome == 'failure'
-        working-directory: _raylib
+      - name: Check if raylib is installed
+        id: raylib_check
         run: |
+          if pkg-config --exists raylib 2>/dev/null; then
+            echo "installed=true" >> $GITHUB_OUTPUT
+            echo "raylib found: $(pkg-config --modversion raylib)"
+          else
+            echo "installed=false" >> $GITHUB_OUTPUT
+            echo "raylib not found, will build from source"
+          fi
+
+      - name: Build raylib from source
+        if: steps.raylib_check.outputs.installed == 'false'
+        run: |
+          set -x
+          RAYLIB_VERSION="5.5"
+          cd /tmp
+          # codeload.github.com is the official tarball download endpoint
+          # It ALWAYS works for public repos - no auth needed, no git needed
+          curl -L "https://codeload.github.com/raysan/raylib/tar.gz/refs/tags/${RAYLIB_VERSION}" -o raylib.tar.gz
+          tar xzf raylib.tar.gz
+          # codeload extracts as: raylib-<tag> (e.g. raylib-5.5)
+          cd "raylib-${RAYLIB_VERSION}"
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -77,6 +85,7 @@ jobs:
           make -j$(nproc)
           sudo make install
           sudo ldconfig
+          echo "raylib ${RAYLIB_VERSION} installed successfully"
 
       # -------------------------------------------------------------------
       # Verify installations
@@ -84,9 +93,10 @@ jobs:
       - name: Verify dependencies
         run: |
           echo "=== raylib ==="
-          ls -la /usr/local/lib/libraylib* 2>/dev/null || ls -la /usr/lib/*/libraylib* 2>/dev/null || echo "raylib lib not found in usual paths"
+          pkg-config --modversion raylib 2>/dev/null && echo "raylib: OK" || echo "raylib: NOT found via pkg-config"
+          ls -la /usr/local/lib/libraylib* 2>/dev/null || true
           echo "=== enet ==="
-          pkg-config --modversion libenet 2>/dev/null || echo "enet not found via pkg-config"
+          pkg-config --modversion libenet 2>/dev/null && echo "enet: OK" || echo "enet: NOT found"
 
       # -------------------------------------------------------------------
       # Configure & Build Kaikai
