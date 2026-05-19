@@ -15,7 +15,7 @@ include(FetchContent)
 # ---- raylib ----------------------------------------------------------------
 find_package(raylib QUIET 4.0)
 if(NOT raylib_FOUND)
-    message(STATUS "raylib not found locally - downloading release tarball")
+    message(STATUS "raylib not found locally - downloading source archive")
     set(FETCHCONTENT_QUIET OFF)
     FetchContent_Declare(
         raylib
