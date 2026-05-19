@@ -13,17 +13,28 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(FetchContent)
 
 # ---- raylib ----------------------------------------------------------------
+# First try system package, then look for locally built raylib
 find_package(raylib QUIET 4.0)
+
 if(NOT raylib_FOUND)
-    message(STATUS "raylib not found locally - downloading source archive")
-    set(FETCHCONTENT_QUIET OFF)
-    FetchContent_Declare(
-        raylib
-        URL      https://github.com/raysan/raylib/archive/refs/tags/5.0.tar.gz
-    )
-    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(BUILD_GAMES   OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(raylib)
+    # Check if raylib was built in _raylib directory (GitHub Actions checkout)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/_raylib/CMakeLists.txt")
+        message(STATUS "Found raylib source in _raylib/ - building alongside project")
+        set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(BUILD_GAMES   OFF CACHE BOOL "" FORCE)
+        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/_raylib raylib_build)
+    else()
+        message(STATUS "raylib not found - will attempt FetchContent download")
+        set(FETCHCONTENT_QUIET OFF)
+        FetchContent_Declare(
+            raylib
+            GIT_REPOSITORY https://github.com/raysan/raylib.git
+            GIT_TAG        5.5
+        )
+        set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+        set(BUILD_GAMES   OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(raylib)
+    endif()
 endif()
 
 # ---- ENet ------------------------------------------------------------------
@@ -33,11 +44,11 @@ if(PkgConfig_FOUND)
 endif()
 
 if(NOT ENET_FOUND)
-    message(STATUS "ENet not found locally - downloading release tarball")
+    message(STATUS "ENet not found locally - fetching via FetchContent")
     FetchContent_Declare(
         enet
-        URL      https://github.com/lsalzman/enet/archive/refs/tags/v1.3.17.tar.gz
-        URL_HASH MD5=eed497f0d1bb8b85b6c3c3e42f9f7538
+        GIT_REPOSITORY https://github.com/lsalzman/enet.git
+        GIT_TAG        v1.3.17
     )
 
     # ENet does not provide a CMakeLists.txt, so we build it ourselves
@@ -66,7 +77,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Collect ALL source files
 # ---------------------------------------------------------------------------
-# Server needs: game, networking, ai, systems, audio, utils + main.cpp
+# Server: game, networking, ai, systems, audio, utils
 file(GLOB_RECURSE KAIKAI_SERVER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/game/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/networking/*.cpp"
@@ -76,7 +87,7 @@ file(GLOB_RECURSE KAIKAI_SERVER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.cpp"
 )
 
-# Client needs: game, networking, graphics, ai, systems, audio, utils + main.cpp
+# Client: game, networking, graphics, ai, systems, audio, utils
 file(GLOB_RECURSE KAIKAI_CLIENT_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/game/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/networking/*.cpp"

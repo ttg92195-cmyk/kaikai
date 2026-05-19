@@ -16,9 +16,9 @@ jobs:
 
     steps:
       # -------------------------------------------------------------------
-      # Checkout
+      # Checkout our repo
       # -------------------------------------------------------------------
-      - name: Checkout repository
+      - name: Checkout Kaikai repository
         uses: actions/checkout@v4
 
       # -------------------------------------------------------------------
@@ -48,27 +48,26 @@ jobs:
             libgl1-mesa-dev
 
       # -------------------------------------------------------------------
-      # raylib – try package first, then build from release tarball
+      # raylib - use actions/checkout to get the source (most reliable)
       # -------------------------------------------------------------------
       - name: Try installing raylib from package
         id: raylib_pkg
         continue-on-error: true
         run: sudo apt-get install -y libraylib-dev
 
-      - name: Build raylib from source archive
+      - name: Checkout raylib source
         if: steps.raylib_pkg.outcome == 'failure'
+        uses: actions/checkout@v4
+        with:
+          repository: raysan/raylib
+          ref: '5.5'
+          path: _raylib
+
+      - name: Build and install raylib
+        if: steps.raylib_pkg.outcome == 'failure'
+        working-directory: _raylib
         run: |
-          set -x
-          cd /tmp
-          # Use curl instead of wget - more reliable on GitHub runners
-          echo "--- Downloading raylib source ---"
-          curl -fSL -o raylib-src.tar.gz https://github.com/raysan/raylib/archive/refs/tags/5.0.tar.gz
-          echo "--- Extracting ---"
-          tar xzf raylib-src.tar.gz
-          ls -la /tmp/raylib-5.0/ || ls -la /tmp/raylib*/ 
-          cd /tmp/raylib-5.0 || cd /tmp/raylib-*
-          echo "--- Building raylib ---"
-          mkdir -p build && cd build
+          mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DCMAKE_INSTALL_PREFIX=/usr/local \
@@ -78,19 +77,16 @@ jobs:
           make -j$(nproc)
           sudo make install
           sudo ldconfig
-          echo "--- raylib installed ---"
 
       # -------------------------------------------------------------------
-      # Verify raylib is findable
+      # Verify installations
       # -------------------------------------------------------------------
-      - name: Verify raylib installation
+      - name: Verify dependencies
         run: |
-          echo "=== Checking raylib ==="
-          ls -la /usr/local/lib/libraylib* 2>/dev/null || true
-          ls -la /usr/lib/x86_64-linux-gnu/libraylib* 2>/dev/null || true
-          pkg-config --modversion raylib 2>/dev/null || echo "raylib pkg-config not found, but cmake should still find it"
-          echo "=== Checking enet ==="
-          pkg-config --modversion libenet 2>/dev/null || echo "enet pkg-config not found"
+          echo "=== raylib ==="
+          ls -la /usr/local/lib/libraylib* 2>/dev/null || ls -la /usr/lib/*/libraylib* 2>/dev/null || echo "raylib lib not found in usual paths"
+          echo "=== enet ==="
+          pkg-config --modversion libenet 2>/dev/null || echo "enet not found via pkg-config"
 
       # -------------------------------------------------------------------
       # Configure & Build Kaikai
@@ -99,12 +95,11 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
       - name: Build
         working-directory: build
-        run: make -j$(nproc) 2>&1 | head -200
+        run: make -j$(nproc) 2>&1 | tail -100
 
       # -------------------------------------------------------------------
       # Upload artifacts
