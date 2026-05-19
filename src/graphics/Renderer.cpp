@@ -64,8 +64,8 @@ void Renderer::init(int width, int height)
     loadShaders();
 
     // Allocate explored tiles array
-    exploredTiles = new bool[GRID_WIDTH * GRID_HEIGHT];
-    memset(exploredTiles, 0, sizeof(bool) * GRID_WIDTH * GRID_HEIGHT);
+    exploredTiles = new bool[MAP_WIDTH * MAP_HEIGHT];
+    memset(exploredTiles, 0, sizeof(bool) * MAP_WIDTH * MAP_HEIGHT);
 }
 
 // ============================================================================
@@ -377,8 +377,8 @@ void Renderer::renderMap() const
 void Renderer::renderFloorAndCeiling() const
 {
     // Large floor plane
-    float mapWorldW = (mapWidth > 0 ? mapWidth : GRID_WIDTH) * CELL_SIZE;
-    float mapWorldH = (mapHeight > 0 ? mapHeight : GRID_HEIGHT) * CELL_SIZE;
+    float mapWorldW = (mapWidth > 0 ? mapWidth : MAP_WIDTH) * TILE_SIZE;
+    float mapWorldH = (mapHeight > 0 ? mapHeight : MAP_HEIGHT) * TILE_SIZE;
 
     Color floorColor   = {45, 42, 48, 255};
     Color ceilingColor = {28, 25, 32, 255};
@@ -402,8 +402,8 @@ void Renderer::renderWalls() const
 {
     if (!mapData) return;
 
-    int w = (mapWidth > 0) ? mapWidth : GRID_WIDTH;
-    int h = (mapHeight > 0) ? mapHeight : GRID_HEIGHT;
+    int w = (mapWidth > 0) ? mapWidth : MAP_WIDTH;
+    int h = (mapHeight > 0) ? mapHeight : MAP_HEIGHT;
 
     Color wallColor = {65, 60, 70, 255};
 
@@ -412,11 +412,11 @@ void Renderer::renderWalls() const
             uint8_t tile = mapData[z * w + x];
             if (tile == TILE_WALL) {
                 Vector3 pos = {
-                    (x + 0.5f) * CELL_SIZE,
+                    (x + 0.5f) * TILE_SIZE,
                     1.5f,  // center of 3.0 height wall
-                    (z + 0.5f) * CELL_SIZE
+                    (z + 0.5f) * TILE_SIZE
                 };
-                DrawCube(pos, CELL_SIZE, 3.0f, CELL_SIZE, wallColor);
+                DrawCube(pos, TILE_SIZE, 3.0f, TILE_SIZE, wallColor);
             }
         }
     }
@@ -426,8 +426,8 @@ void Renderer::renderDoors() const
 {
     if (!mapData) return;
 
-    int w = (mapWidth > 0) ? mapWidth : GRID_WIDTH;
-    int h = (mapHeight > 0) ? mapHeight : GRID_HEIGHT;
+    int w = (mapWidth > 0) ? mapWidth : MAP_WIDTH;
+    int h = (mapHeight > 0) ? mapHeight : MAP_HEIGHT;
 
     Color closedDoorColor = {90, 55, 35, 255};
     Color openDoorColor   = {60, 40, 25, 255};
@@ -437,27 +437,27 @@ void Renderer::renderDoors() const
         for (int x = 0; x < w; ++x) {
             uint8_t tile = mapData[z * w + x];
             Vector3 pos = {
-                (x + 0.5f) * CELL_SIZE,
+                (x + 0.5f) * TILE_SIZE,
                 1.5f,
-                (z + 0.5f) * CELL_SIZE
+                (z + 0.5f) * TILE_SIZE
             };
 
             if (tile == TILE_DOOR_CLOSED) {
-                DrawCube(pos, CELL_SIZE, 3.0f, 0.2f, closedDoorColor);
+                DrawCube(pos, TILE_SIZE, 3.0f, 0.2f, closedDoorColor);
                 // Door frame
                 DrawCube(
-                    {pos.x - CELL_SIZE * 0.45f, 1.5f, pos.z},
+                    {pos.x - TILE_SIZE * 0.45f, 1.5f, pos.z},
                     0.1f, 3.0f, 0.3f, wallColor
                 );
                 DrawCube(
-                    {pos.x + CELL_SIZE * 0.45f, 1.5f, pos.z},
+                    {pos.x + TILE_SIZE * 0.45f, 1.5f, pos.z},
                     0.1f, 3.0f, 0.3f, wallColor
                 );
             } else if (tile == TILE_DOOR_OPEN) {
                 // Open door: thin panel pushed to the side
                 DrawCube(
-                    {pos.x + CELL_SIZE * 0.4f, 1.5f, pos.z},
-                    0.15f, 2.8f, CELL_SIZE * 0.4f,
+                    {pos.x + TILE_SIZE * 0.4f, 1.5f, pos.z},
+                    0.15f, 2.8f, TILE_SIZE * 0.4f,
                     openDoorColor
                 );
             }
@@ -469,8 +469,8 @@ void Renderer::renderSwitches() const
 {
     if (!mapData) return;
 
-    int w = (mapWidth > 0) ? mapWidth : GRID_WIDTH;
-    int h = (mapHeight > 0) ? mapHeight : GRID_HEIGHT;
+    int w = (mapWidth > 0) ? mapWidth : MAP_WIDTH;
+    int h = (mapHeight > 0) ? mapHeight : MAP_HEIGHT;
 
     Color switchOnColor  = {30, 200, 60, 255};
     Color switchOffColor = {180, 40, 30, 255};
@@ -479,9 +479,9 @@ void Renderer::renderSwitches() const
         for (int x = 0; x < w; ++x) {
             if (mapData[z * w + x] == TILE_SWITCH) {
                 Vector3 pos = {
-                    (x + 0.5f) * CELL_SIZE,
+                    (x + 0.5f) * TILE_SIZE,
                     1.4f,
-                    (z + 0.5f) * CELL_SIZE
+                    (z + 0.5f) * TILE_SIZE
                 };
                 // Switch plate on wall
                 DrawCube(pos, 0.15f, 0.4f, 0.3f, {80, 75, 85, 255});
@@ -506,8 +506,8 @@ void Renderer::renderItems() const
 {
     if (!mapData) return;
 
-    int w = (mapWidth > 0) ? mapWidth : GRID_WIDTH;
-    int h = (mapHeight > 0) ? mapHeight : GRID_HEIGHT;
+    int w = (mapWidth > 0) ? mapWidth : MAP_WIDTH;
+    int h = (mapHeight > 0) ? mapHeight : MAP_HEIGHT;
 
     Color batteryColor = {220, 200, 50, 255};
     Color keyColor     = {200, 180, 60, 255};
@@ -516,9 +516,9 @@ void Renderer::renderItems() const
         for (int x = 0; x < w; ++x) {
             if (mapData[z * w + x] == TILE_ITEM) {
                 Vector3 pos = {
-                    (x + 0.5f) * CELL_SIZE,
+                    (x + 0.5f) * TILE_SIZE,
                     0.4f,
-                    (z + 0.5f) * CELL_SIZE
+                    (z + 0.5f) * TILE_SIZE
                 };
                 // Floating item with bob animation
                 float bob = sinf(animationTime * 2.5f + (float)(x * 7 + z * 13)) * 0.08f;
@@ -531,9 +531,9 @@ void Renderer::renderItems() const
                 DrawSphereWires(pos, 0.3f, 6, 6, {255, 240, 100, 120});
             } else if (mapData[z * w + x] == TILE_EXIT) {
                 Vector3 pos = {
-                    (x + 0.5f) * CELL_SIZE,
+                    (x + 0.5f) * TILE_SIZE,
                     1.5f,
-                    (z + 0.5f) * CELL_SIZE
+                    (z + 0.5f) * TILE_SIZE
                 };
                 // Exit marker - glowing pillar
                 float pulse = 0.7f + 0.3f * sinf(animationTime * 3.0f);
@@ -764,8 +764,8 @@ void Renderer::renderMinimap(const Game& game, const PlayerState& localPlayer)
 {
     if (!mapData || !exploredTiles) return;
 
-    int w = (mapWidth > 0) ? mapWidth : GRID_WIDTH;
-    int h = (mapHeight > 0) ? mapHeight : GRID_HEIGHT;
+    int w = (mapWidth > 0) ? mapWidth : MAP_WIDTH;
+    int h = (mapHeight > 0) ? mapHeight : MAP_HEIGHT;
 
     const int tileSize = 3;
     const int mapPixelW = w * tileSize;
@@ -813,8 +813,8 @@ void Renderer::renderMinimap(const Game& game, const PlayerState& localPlayer)
         const PlayerState& state = player.getState();
         if (state.isSpectator) continue;
 
-        int px = (int)(state.position.x / CELL_SIZE);
-        int pz = (int)(state.position.z / CELL_SIZE);
+        int px = (int)(state.position.x / TILE_SIZE);
+        int pz = (int)(state.position.z / TILE_SIZE);
 
         if (px < 0 || px >= w || pz < 0 || pz >= h) continue;
 
@@ -837,8 +837,8 @@ void Renderer::renderMinimap(const Game& game, const PlayerState& localPlayer)
     }
 
     // Draw local player direction indicator
-    int lpx = (int)(localPlayer.position.x / CELL_SIZE);
-    int lpz = (int)(localPlayer.position.z / CELL_SIZE);
+    int lpx = (int)(localPlayer.position.x / TILE_SIZE);
+    int lpz = (int)(localPlayer.position.z / TILE_SIZE);
     if (lpx >= 0 && lpx < w && lpz >= 0 && lpz < h) {
         float dirX = sinf(localPlayer.rotation);
         float dirZ = cosf(localPlayer.rotation);
@@ -990,12 +990,12 @@ void Renderer::updateExplored(const PlayerState& localPlayer)
 {
     if (!exploredTiles || !mapData) return;
 
-    int w = (mapWidth > 0) ? mapWidth : GRID_WIDTH;
-    int h = (mapHeight > 0) ? mapHeight : GRID_HEIGHT;
+    int w = (mapWidth > 0) ? mapWidth : MAP_WIDTH;
+    int h = (mapHeight > 0) ? mapHeight : MAP_HEIGHT;
 
     // Player tile position
-    int px = (int)(localPlayer.position.x / CELL_SIZE);
-    int pz = (int)(localPlayer.position.z / CELL_SIZE);
+    int px = (int)(localPlayer.position.x / TILE_SIZE);
+    int pz = (int)(localPlayer.position.z / TILE_SIZE);
 
     // Reveal tiles within a view radius
     const int viewRadius = 6;

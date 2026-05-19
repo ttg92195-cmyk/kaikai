@@ -1,5 +1,7 @@
 #pragma once
 #include "raylib.h"
+#include "raymath.h"
+#include "../networking/PacketTypes.h"
 #include <cstdint>
 #include <vector>
 

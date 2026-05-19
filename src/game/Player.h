@@ -56,9 +56,9 @@ private:
     void updateCamera();
 
     // Map constants for collision (from Kaikai namespace)
-    using Kaikai::MAP_WIDTH;
-    using Kaikai::MAP_HEIGHT;
-    using Kaikai::TILE_SIZE;
+    static constexpr int32_t MAP_W = Kaikai::MAP_WIDTH;
+    static constexpr int32_t MAP_H = Kaikai::MAP_HEIGHT;
+    static constexpr float   TILE_SZ = Kaikai::TILE_SIZE;
 
     // Stamina thresholds
     static constexpr float STAMINA_MIN_TO_RUN = 10.0f;

@@ -62,7 +62,7 @@ void ItemSpawnSystem::respawnItem(uint32_t itemId) {
 Vector3 ItemSpawnSystem::getRandomFloorPosition(const uint8_t* gridData) const {
     if (spawnPositions.empty()) {
         // Fallback: return center of world if no valid positions
-        return { GRID_WIDTH * CELL_SIZE * 0.5f, 0.0f, GRID_HEIGHT * CELL_SIZE * 0.5f };
+        return { MAP_WIDTH * TILE_SIZE * 0.5f, 0.0f, MAP_HEIGHT * TILE_SIZE * 0.5f };
     }
 
     // Use const_cast to allow rng usage in const method
@@ -86,12 +86,12 @@ void ItemSpawnSystem::collectValidPositions(const uint8_t* gridData) {
     if (!gridData) {
         // If no grid data provided, generate a default set of positions
         // covering the entire grid area as walkable
-        for (int z = 0; z < GRID_HEIGHT; z++) {
-            for (int x = 0; x < GRID_WIDTH; x++) {
+        for (int z = 0; z < MAP_HEIGHT; z++) {
+            for (int x = 0; x < MAP_WIDTH; x++) {
                 Vector3 pos = {
-                    x * CELL_SIZE + CELL_SIZE * 0.5f,
+                    x * TILE_SIZE + TILE_SIZE * 0.5f,
                     0.0f,
-                    z * CELL_SIZE + CELL_SIZE * 0.5f
+                    z * TILE_SIZE + TILE_SIZE * 0.5f
                 };
                 spawnPositions.push_back(pos);
             }
@@ -100,15 +100,15 @@ void ItemSpawnSystem::collectValidPositions(const uint8_t* gridData) {
     }
 
     // Grid cell values: 0 = wall, 1 = floor, 2 = dark floor, 3 = story area
-    for (int z = 0; z < GRID_HEIGHT; z++) {
-        for (int x = 0; x < GRID_WIDTH; x++) {
-            uint8_t cell = gridData[z * GRID_WIDTH + x];
+    for (int z = 0; z < MAP_HEIGHT; z++) {
+        for (int x = 0; x < MAP_WIDTH; x++) {
+            uint8_t cell = gridData[z * MAP_WIDTH + x];
             // Floor cells (1, 2, 3) are valid spawn positions
             if (cell >= 1 && cell <= 3) {
                 Vector3 pos = {
-                    x * CELL_SIZE + CELL_SIZE * 0.5f,
+                    x * TILE_SIZE + TILE_SIZE * 0.5f,
                     0.0f,
-                    z * CELL_SIZE + CELL_SIZE * 0.5f
+                    z * TILE_SIZE + TILE_SIZE * 0.5f
                 };
                 spawnPositions.push_back(pos);
             }
@@ -176,11 +176,11 @@ void ItemSpawnSystem::spawnItems() {
     std::vector<Vector3> darkPositions;
     for (const auto& pos : shuffledPositions) {
         // Estimate grid cell from position - dark cells are type 2
-        int gx = (int)(pos.x / CELL_SIZE);
-        int gz = (int)(pos.z / CELL_SIZE);
+        int gx = (int)(pos.x / TILE_SIZE);
+        int gz = (int)(pos.z / TILE_SIZE);
         // Heuristic: positions in the outer thirds of the map are "darker"
-        bool inDarkArea = (gx < GRID_WIDTH / 3 || gx > GRID_WIDTH * 2 / 3 ||
-                           gz < GRID_HEIGHT / 3 || gz > GRID_HEIGHT * 2 / 3);
+        bool inDarkArea = (gx < MAP_WIDTH / 3 || gx > MAP_WIDTH * 2 / 3 ||
+                           gz < MAP_HEIGHT / 3 || gz > MAP_HEIGHT * 2 / 3);
         if (inDarkArea) {
             darkPositions.push_back(pos);
         }
@@ -216,11 +216,11 @@ void ItemSpawnSystem::spawnItems() {
     // Notes are placed near story-relevant locations (grid cell value 3)
     std::vector<Vector3> storyPositions;
     for (const auto& pos : shuffledPositions) {
-        int gx = (int)(pos.x / CELL_SIZE);
-        int gz = (int)(pos.z / CELL_SIZE);
+        int gx = (int)(pos.x / TILE_SIZE);
+        int gz = (int)(pos.z / TILE_SIZE);
         // Story areas are typically in the middle region
-        bool inStoryArea = (gx > GRID_WIDTH / 4 && gx < GRID_WIDTH * 3 / 4 &&
-                            gz > GRID_HEIGHT / 4 && gz < GRID_HEIGHT * 3 / 4);
+        bool inStoryArea = (gx > MAP_WIDTH / 4 && gx < MAP_WIDTH * 3 / 4 &&
+                            gz > MAP_HEIGHT / 4 && gz < MAP_HEIGHT * 3 / 4);
         if (inStoryArea) {
             storyPositions.push_back(pos);
         }

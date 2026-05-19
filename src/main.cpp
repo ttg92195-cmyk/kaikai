@@ -1,4 +1,5 @@
 #include "raylib.h"
+#include "raymath.h"
 #include "game/Game.h"
 #include "graphics/Renderer.h"
 #include "graphics/Flashlight.h"

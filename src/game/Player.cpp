@@ -263,10 +263,10 @@ bool Player::checkCollision(Vector3 newPos, const uint8_t* mapData) {
         float testX = newPos.x + offsets[i][0];
         float testZ = newPos.z + offsets[i][1];
 
-        int gx = static_cast<int>(testX / TILE_SIZE);
-        int gz = static_cast<int>(testZ / TILE_SIZE);
+        int gx = static_cast<int>(testX / TILE_SZ);
+        int gz = static_cast<int>(testZ / TILE_SZ);
 
-        if (gx < 0 || gx >= MAP_WIDTH || gz < 0 || gz >= MAP_HEIGHT) {
+        if (gx < 0 || gx >= MAP_W || gz < 0 || gz >= MAP_H) {
             return true; // Out of bounds treated as wall
         }
 

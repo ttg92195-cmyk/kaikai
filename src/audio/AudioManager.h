@@ -1,5 +1,6 @@
 #pragma once
 #include "raylib.h"
+#include "../networking/PacketTypes.h"
 #include <unordered_map>
 #include <string>
 #include <vector>
