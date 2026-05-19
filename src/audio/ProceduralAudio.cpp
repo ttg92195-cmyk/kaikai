@@ -1,12 +1,13 @@
 #include "ProceduralAudio.h"
 #include <cmath>
+#include <cstring>
 #include <cstdlib>
 #include <algorithm>
 
 namespace ProceduralAudio {
 
-static constexpr float PI = 3.14159265358979f;
-static constexpr float TWO_PI = 6.28318530717959f;
+static constexpr float PROC_PI = 3.14159265358979f;
+static constexpr float PROC_TWO_PI = 6.28318530717959f;
 
 // ============================================================
 // Helper functions
@@ -16,7 +17,7 @@ std::vector<float> generateSineWave(float frequency, float duration, float sampl
     size_t numSamples = (size_t)(duration * sampleRate);
     std::vector<float> samples(numSamples, 0.0f);
 
-    float angularFreq = TWO_PI * frequency;
+    float angularFreq = PROC_TWO_PI * frequency;
     for (size_t i = 0; i < numSamples; i++) {
         float t = (float)i / sampleRate;
         samples[i] = sinf(angularFreq * t);
@@ -146,8 +147,8 @@ Wave generateHeartbeat(float bpm) {
     for (size_t i = thump1StartSample; i < thump1EndSample; i++) {
         float t = (float)(i - thump1StartSample) / sampleRate;
         // Low frequency sine with harmonic
-        float thump = sinf(TWO_PI * 60.0f * t) * 0.8f;
-        thump += sinf(TWO_PI * 30.0f * t) * 0.3f; // Sub-bass
+        float thump = sinf(PROC_TWO_PI * 60.0f * t) * 0.8f;
+        thump += sinf(PROC_TWO_PI * 30.0f * t) * 0.3f; // Sub-bass
 
         // Fast attack, medium decay envelope
         float progress = t / thump1Duration;
@@ -166,8 +167,8 @@ Wave generateHeartbeat(float bpm) {
     for (size_t i = thump2StartSample; i < thump2EndSample; i++) {
         float t = (float)(i - thump2StartSample) / sampleRate;
         // Higher frequency for the second beat (the "dub" of "lub-dub")
-        float thump = sinf(TWO_PI * 80.0f * t) * 0.6f;
-        thump += sinf(TWO_PI * 40.0f * t) * 0.2f;
+        float thump = sinf(PROC_TWO_PI * 80.0f * t) * 0.6f;
+        thump += sinf(PROC_TWO_PI * 40.0f * t) * 0.2f;
 
         float progress = t / thump2Duration;
         float envelope = expf(-progress * 10.0f);
@@ -239,11 +240,11 @@ Wave generateDoorCreak() {
 
         // Sine wave with frequency sweep
         // Use phase accumulation for smooth sweep
-        float sample = sinf(TWO_PI * freq * t);
+        float sample = sinf(PROC_TWO_PI * freq * t);
 
         // Amplitude modulation: create rhythmic creaking
         float amFreq = 8.0f + progress * 12.0f; // Speed up the creak
-        float am = 0.5f + 0.5f * sinf(TWO_PI * amFreq * t);
+        float am = 0.5f + 0.5f * sinf(PROC_TWO_PI * amFreq * t);
 
         // Overall envelope: fade in, sustain, fade out
         float envelope = 1.0f;
@@ -284,7 +285,7 @@ Wave generateWhisper(float duration) {
 
         // Breathing-like amplitude modulation
         float breathRate = 3.0f + sinf(t * 0.5f) * 0.5f; // Varying breath rate
-        float am = 0.3f + 0.7f * (0.5f + 0.5f * sinf(TWO_PI * breathRate * t));
+        float am = 0.3f + 0.7f * (0.5f + 0.5f * sinf(PROC_TWO_PI * breathRate * t));
 
         // Overall envelope: fade in and out
         float progress = t / duration;
@@ -307,8 +308,8 @@ Wave generateWhisper(float duration) {
         float progress = t / duration;
 
         // Modulate formants with different patterns
-        float f1Gain = 0.03f * (0.5f + 0.5f * sinf(TWO_PI * 4.0f * t));
-        float f2Gain = 0.015f * (0.5f + 0.5f * sinf(TWO_PI * 6.0f * t + 1.0f));
+        float f1Gain = 0.03f * (0.5f + 0.5f * sinf(PROC_TWO_PI * 4.0f * t));
+        float f2Gain = 0.015f * (0.5f + 0.5f * sinf(PROC_TWO_PI * 6.0f * t + 1.0f));
 
         float envelope = 1.0f;
         if (progress < 0.1f) envelope = progress / 0.1f;
@@ -333,7 +334,7 @@ Wave generateStatic(float duration) {
         float t = (float)i / sampleRate;
 
         // Random volume fluctuation
-        float volMod = 0.8f + 0.2f * sinf(TWO_PI * 0.5f * t + (float)i * 0.01f);
+        float volMod = 0.8f + 0.2f * sinf(PROC_TWO_PI * 0.5f * t + (float)i * 0.01f);
 
         // Envelope
         float progress = t / duration;
@@ -366,7 +367,7 @@ Wave generateScream() {
         for (int f = 0; f < 5; f++) {
             // Each frequency with slight detuning for harshness
             float detune = 1.0f + sinf(t * 10.0f + f) * 0.02f;
-            sample += sinf(TWO_PI * frequencies[f] * detune * t) * amplitudes[f];
+            sample += sinf(PROC_TWO_PI * frequencies[f] * detune * t) * amplitudes[f];
         }
 
         // Fast attack, sustained then quick release
@@ -381,7 +382,7 @@ Wave generateScream() {
         }
 
         // Add harshness: rapid amplitude modulation
-        float harshAM = 0.7f + 0.3f * sinf(TWO_PI * 30.0f * t);
+        float harshAM = 0.7f + 0.3f * sinf(PROC_TWO_PI * 30.0f * t);
         if (progress < 0.1f) harshAM = 1.0f; // No AM at attack for cleaner hit
 
         samples[i] = sample * envelope * harshAM * 0.6f;
@@ -433,9 +434,9 @@ Wave generateWind() {
         float t = (float)i / sampleRate;
 
         // Slow modulation (howling)
-        float slowMod = 0.5f + 0.5f * sinf(TWO_PI * 0.3f * t);
+        float slowMod = 0.5f + 0.5f * sinf(PROC_TWO_PI * 0.3f * t);
         // Medium modulation (gusting)
-        float medMod = 0.7f + 0.3f * sinf(TWO_PI * 1.2f * t + 0.5f);
+        float medMod = 0.7f + 0.3f * sinf(PROC_TWO_PI * 1.2f * t + 0.5f);
 
         float envelope = 1.0f;
         float progress = t / duration;
@@ -482,9 +483,9 @@ Wave generateDripping() {
             float progress = t / dripDuration;
 
             // High-frequency sine with fast decay
-            float drip = sinf(TWO_PI * 3000.0f * t);
+            float drip = sinf(PROC_TWO_PI * 3000.0f * t);
             // Add a bit of lower frequency for body
-            drip += sinf(TWO_PI * 1500.0f * t) * 0.3f;
+            drip += sinf(PROC_TWO_PI * 1500.0f * t) * 0.3f;
 
             // Envelope: very fast attack, exponential decay
             float envelope = expf(-progress * 20.0f);
