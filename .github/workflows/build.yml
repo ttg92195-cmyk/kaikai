@@ -48,57 +48,27 @@ jobs:
             libgl1-mesa-dev
 
       # -------------------------------------------------------------------
-      # raylib - download via GitHub API then build from source
-      # api.github.com bypasses the runner's git credential interception
+      # raylib - bypass credential helper, use anonymous git clone
+      # The runner's GITHUB_TOKEN credential helper blocks access to
+      # other public repos. Bypassing it allows anonymous access which
+      # works fine for public repos.
       # -------------------------------------------------------------------
-      - name: Check if raylib is installed
-        id: raylib_check
+      - name: Clone and build raylib
         run: |
-          if pkg-config --exists raylib 2>/dev/null; then
-            echo "installed=true" >> $GITHUB_OUTPUT
-            echo "raylib found: $(pkg-config --modversion raylib)"
-          else
-            echo "installed=false" >> $GITHUB_OUTPUT
-            echo "raylib not found, will build from source"
-          fi
-
-      - name: Download and build raylib
-        if: steps.raylib_check.outputs.installed == 'false'
-        run: |
-          RAYLIB_VERSION="5.5"
-          cd /tmp
+          RAYLIB_VERSION="5.0"
           
-          echo "=== Downloading raylib ${RAYLIB_VERSION} via GitHub API ==="
-          # GitHub API tarball endpoint works for public repos
-          # Uses api.github.com which is NOT intercepted by runner's git config
-          curl -fSL \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/raysan/raylib/tarball/${RAYLIB_VERSION}" \
-            -o raylib.tar.gz
+          echo "=== Removing credential helpers that block public repo access ==="
+          # The actions/checkout step sets up a credential helper with GITHUB_TOKEN
+          # that is scoped to ONLY the current repo. This blocks access to other
+          # public repos like raysan/raylib. We bypass it for this clone.
+          git config --global --unset-all credential.helper 2>/dev/null || true
+          rm -f ~/.netrc 2>/dev/null || true
           
-          # Verify download
-          SIZE=$(wc -c < raylib.tar.gz)
-          echo "Downloaded ${SIZE} bytes"
-          if [ "$SIZE" -lt 10000 ]; then
-            echo "ERROR: Download too small!"
-            file raylib.tar.gz
-            head -c 500 raylib.tar.gz
-            exit 1
-          fi
+          echo "=== Cloning raylib ${RAYLIB_VERSION} ==="
+          git clone --depth 1 --branch "${RAYLIB_VERSION}" https://github.com/raysan/raylib.git /tmp/raylib
           
-          # Extract (GitHub API tarballs extract as: raysan-raylib-abcdef1/)
-          tar xzf raylib.tar.gz
-          EXTRACTED_DIR=$(ls -d raysan-raylib-* 2>/dev/null | head -1)
-          if [ -z "$EXTRACTED_DIR" ]; then
-            echo "ERROR: Could not find extracted directory"
-            ls -la /tmp/
-            exit 1
-          fi
-          echo "Extracted to: ${EXTRACTED_DIR}"
-          
-          # Build
-          cd "$EXTRACTED_DIR"
+          echo "=== Building raylib ==="
+          cd /tmp/raylib
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
