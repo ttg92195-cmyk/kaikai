@@ -101,6 +101,7 @@ file(GLOB_RECURSE KAIKAI_SERVER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/audio/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.cpp"
 )
 
 # Client: game, networking, graphics, ai, systems, audio, utils
