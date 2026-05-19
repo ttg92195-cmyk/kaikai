@@ -11,6 +11,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Dependencies
 # ---------------------------------------------------------------------------
 
+# ---- Threads (needed by both targets and ENet) -----------------------------
+find_package(Threads REQUIRED)
+
 # ---- raylib ----------------------------------------------------------------
 # First: try CMake find_package (works if raylib was installed via cmake install)
 find_package(raylib QUIET)
@@ -77,7 +80,6 @@ if(NOT ENET_FOUND)
     )
     target_include_directories(enet PUBLIC ${enet_SOURCE_DIR}/include)
     target_compile_definitions(enet PUBLIC HAS_SOCKLEN_T=1)
-    find_package(Threads REQUIRED)
     target_link_libraries(enet PUBLIC Threads::Threads)
     set(ENET_LIBRARIES enet)
     set(ENET_INCLUDE_DIRS ${enet_SOURCE_DIR}/include)
@@ -119,7 +121,7 @@ target_include_directories(kaikai_server PRIVATE
     ${ENET_INCLUDE_DIRS}
 )
 target_link_libraries(kaikai_server PRIVATE
-    raylib
+    raylib::raylib
     ${ENET_LIBRARIES}
     Threads::Threads
     m
@@ -136,7 +138,7 @@ target_include_directories(kaikai_client PRIVATE
     ${ENET_INCLUDE_DIRS}
 )
 target_link_libraries(kaikai_client PRIVATE
-    raylib
+    raylib::raylib
     ${ENET_LIBRARIES}
     Threads::Threads
     m
