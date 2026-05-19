@@ -12,11 +12,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ---------------------------------------------------------------------------
 
 # ---- raylib ----------------------------------------------------------------
-# Use system-installed raylib (apt: libraylib-dev)
+# First: try CMake find_package (works if raylib was installed via cmake install)
 find_package(raylib QUIET)
 
 if(NOT raylib_FOUND)
-    # Fallback: try pkg-config (some distros install raylib without CMake config)
+    # Second: try pkg-config (some installs only register via pkg-config)
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
         pkg_check_modules(RAYLIB QUIET raylib)
@@ -25,20 +25,24 @@ if(NOT raylib_FOUND)
     if(RAYLIB_FOUND)
         message(STATUS "raylib found via pkg-config: ${RAYLIB_VERSION}")
         # Create an imported target from pkg-config results
-        add_library(raylib::raylib SHARED IMPORTED)
+        add_library(raylib::raylib UNKNOWN IMPORTED)
+        find_library(RAYLIB_LIB_PATH NAMES raylib PATHS ${RAYLIB_LIBRARY_DIRS} /usr/local/lib)
+        find_path(RAYLIB_INC_PATH NAMES raylib.h PATHS ${RAYLIB_INCLUDE_DIRS} /usr/local/include)
         set_target_properties(raylib::raylib PROPERTIES
-            IMPORTED_LOCATION "${RAYLIB_LINK_LIBRARIES}"
-            INTERFACE_INCLUDE_DIRECTORIES "${RAYLIB_INCLUDE_DIRS}"
+            IMPORTED_LOCATION "${RAYLIB_LIB_PATH}"
+            INTERFACE_INCLUDE_DIRECTORIES "${RAYLIB_INC_PATH}"
         )
+        set(raylib_FOUND TRUE)
     else()
         message(FATAL_ERROR
-            "raylib NOT found! Install it with:\n"
-            "  sudo apt-get install libraylib-dev\n"
-            "Or build from source and install to /usr/local"
+            "raylib NOT found!\n"
+            "Install with: sudo apt-get install libraylib-dev\n"
+            "Or build from source: https://github.com/raysan/raylib\n"
+            "CMAKE_PREFIX_PATH was: ${CMAKE_PREFIX_PATH}"
         )
     endif()
 else()
-    message(STATUS "raylib found via CMake config: ${raylib_VERSION}")
+    message(STATUS "raylib found via CMake find_package: ${raylib_VERSION}")
 endif()
 
 # ---- ENet ------------------------------------------------------------------

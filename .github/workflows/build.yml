@@ -22,10 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       # -------------------------------------------------------------------
-      # Install ALL system dependencies including raylib from apt
-      # This completely avoids the GitHub authentication issue that
-      # prevented git clone / curl / wget from downloading raylib
-      # from the raysan/raylib repository (Builds #1-#11 all failed).
+      # Install system dependencies (NOT libraylib-dev - not in Ubuntu 24.04)
       # -------------------------------------------------------------------
       - name: Install build tools and libraries
         run: |
@@ -34,8 +31,6 @@ jobs:
             build-essential \
             cmake \
             pkg-config \
-            libraylib-dev \
-            libenet-dev \
             libglfw3-dev \
             libx11-dev \
             libxrandr-dev \
@@ -49,30 +44,84 @@ jobs:
             libasound2-dev \
             libpulse-dev \
             libmbedtls-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev \
+            libenet-dev
+
+      # -------------------------------------------------------------------
+      # Build and install raylib from source
+      #
+      # Why this approach works (after 12 failed builds):
+      # - libraylib-dev doesn't exist in Ubuntu 24.04 repos
+      # - git clone fails because actions/checkout sets GITHUB_TOKEN in
+      #   http.extraheader, which git sends to ALL github.com requests,
+      #   and the scoped token only works for our repo, not raysan/raylib
+      # - wget/curl do NOT use GITHUB_TOKEN - they make anonymous requests
+      # - Anonymous requests to public repos on GitHub work fine
+      # - So we download the tarball with wget, then build from source
+      # -------------------------------------------------------------------
+      - name: Build and install raylib from source
+        run: |
+          RAYLIB_VERSION="5.5"
+          RAYLIB_URL="https://github.com/raysan/raylib/archive/refs/tags/${RAYLIB_VERSION}.tar.gz"
+
+          echo "=== Step 1: Download raylib ${RAYLIB_VERSION} source ==="
+          echo "URL: ${RAYLIB_URL}"
+
+          # wget does NOT send GITHUB_TOKEN (unlike git which does)
+          # This means anonymous download of public repo tarballs works!
+          wget -q "${RAYLIB_URL}" -O /tmp/raylib.tar.gz
+
+          # Verify the download is valid (not an error page)
+          FILE_SIZE=$(stat -c%s /tmp/raylib.tar.gz 2>/dev/null || echo "0")
+          echo "Downloaded: ${FILE_SIZE} bytes"
+
+          if [ "$FILE_SIZE" -lt 10000 ]; then
+            echo "ERROR: Download too small - likely an error page"
+            echo "Content:"
+            cat /tmp/raylib.tar.gz
+            exit 1
+          fi
+
+          echo "=== Step 2: Extract ==="
+          tar xzf /tmp/raylib.tar.gz -C /tmp
+          ls /tmp/raylib-${RAYLIB_VERSION}/
+
+          echo "=== Step 3: Build raylib ==="
+          cd /tmp/raylib-${RAYLIB_VERSION}
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_GAMES=OFF \
+            -DUSE_EXTERNAL_GLFW=OFF
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+          echo "=== raylib ${RAYLIB_VERSION} installed successfully ==="
 
       # -------------------------------------------------------------------
       # Verify raylib is installed
       # -------------------------------------------------------------------
       - name: Verify raylib installation
         run: |
-          echo "=== raylib version ==="
-          pkg-config --modversion raylib 2>/dev/null || echo "raylib not found via pkg-config"
-          echo "=== raylib libs ==="
-          pkg-config --libs raylib 2>/dev/null || echo "no pkg-config info"
-          echo "=== raylib cflags ==="
-          pkg-config --cflags raylib 2>/dev/null || echo "no pkg-config info"
-          echo "=== enet version ==="
-          pkg-config --modversion libenet 2>/dev/null || echo "enet not found"
-          echo "=== library files ==="
-          ls -la /usr/lib/x86_64-linux-gnu/libraylib* 2>/dev/null || true
-          ls -la /usr/lib/x86_64-linux-gnu/libenet* 2>/dev/null || true
+          echo "=== raylib via pkg-config ==="
+          pkg-config --modversion raylib 2>/dev/null && echo "Found!" || echo "NOT found via pkg-config"
+          echo "=== raylib library files ==="
+          ls -la /usr/local/lib/libraylib* 2>/dev/null || true
+          echo "=== raylib cmake config ==="
+          ls -la /usr/local/lib/cmake/raylib/ 2>/dev/null || true
+          echo "=== enet ==="
+          pkg-config --modversion libenet 2>/dev/null || echo "NOT found"
 
       # -------------------------------------------------------------------
-      # Configure & Build
+      # Configure & Build Kaikai
       # -------------------------------------------------------------------
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_PREFIX_PATH=/usr/local
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} -- -j$(nproc) 2>&1 | tail -150
