@@ -189,23 +189,16 @@ jobs:
             -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
             -DCMAKE_BUILD_TYPE=Release \
             ..
-          # Only build the headless server (no raylib needed)
           echo "Configured for Windows headless server"
 
       - name: Build Windows headless server
         run: |
           cd build-win
-          cmake --build . --target kaikai_headless_server -j$(nproc) || {
-            echo "Windows cross-compile failed, this is expected if ENet FetchContent doesn't work with MinGW"
-            echo "Creating a placeholder notice instead"
-            echo "Windows headless server cross-compile is experimental" > /tmp/windows-build-note.txt
-          }
+          cmake --build . --target kaikai_headless_server -j$(nproc)
 
       - name: Upload Windows headless server
         uses: actions/upload-artifact@v4
         with:
           name: kaikai-headless-server-windows
-          path: |
-            build-win/kaikai_headless_server.exe
-            /tmp/windows-build-note.txt
-          if-no-files-found: warn
+          path: build-win/kaikai_headless_server.exe
+          if-no-files-found: error

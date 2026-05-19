@@ -865,8 +865,7 @@ int main(int argc, char* argv[]) {
                     renderer->beginFrame();
                     if (localPlayer) {
                         renderer->renderGame(*game, localPlayer->getState());
-                        renderer->renderHUD(localPlayer->getState());
-                        renderer->renderSanityEffects(localPlayer->getState().sanity);
+                        // HUD and sanity effects are drawn by endFrame() compositing
                     }
 
                     if (localPlayer && jumpscareSystem) {
@@ -1034,8 +1033,7 @@ int main(int argc, char* argv[]) {
         renderer.beginFrame();
         if (localPlayer) {
             renderer.renderGame(game, localPlayer->getState());
-            renderer.renderHUD(localPlayer->getState());
-            renderer.renderSanityEffects(localPlayer->getState().sanity);
+            // HUD and sanity effects are drawn by endFrame() compositing
         }
 
         if (localPlayer) {

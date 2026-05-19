@@ -133,6 +133,7 @@ void SpectatorSystem::renderSpectatorView(const Camera3D& camera, const PlayerSt
 
 #if !defined(KAIKAI_HEADLESS)
 void SpectatorSystem::renderSpectatorUI() const {
+    int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
     // === "You are dead" message ===

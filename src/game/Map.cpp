@@ -809,7 +809,6 @@ void GameMap::renderItems() const {
             }
         }
 
-        // Glow effect around items
-        Color glowColor = {255, 255, 200, 40};
+    }
 #endif
 }

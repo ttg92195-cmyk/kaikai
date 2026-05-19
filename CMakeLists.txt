@@ -120,11 +120,19 @@ if(NOT ANDROID)
             ${enet_SOURCE_DIR}/packet.c
             ${enet_SOURCE_DIR}/peer.c
             ${enet_SOURCE_DIR}/protocol.c
-            ${enet_SOURCE_DIR}/unix.c
         )
         target_include_directories(enet PUBLIC ${enet_SOURCE_DIR}/include)
         target_compile_definitions(enet PUBLIC HAS_SOCKLEN_T=1)
+        # Add platform-specific ENet source
+        if(WIN32)
+            target_sources(enet PUBLIC ${enet_SOURCE_DIR}/win32.c)
+        else()
+            target_sources(enet PUBLIC ${enet_SOURCE_DIR}/unix.c)
+        endif()
         target_link_libraries(enet PUBLIC Threads::Threads)
+        if(WIN32)
+            target_link_libraries(enet PUBLIC winmm ws2_32)
+        endif()
         set(ENET_LIBRARIES enet)
         set(ENET_INCLUDE_DIRS ${enet_SOURCE_DIR}/include)
     endif()
@@ -163,8 +171,10 @@ if(NOT ANDROID)
         ${ENET_LIBRARIES}
         Threads::Threads
         m
-        dl
     )
+    if(NOT WIN32)
+        target_link_libraries(kaikai_headless_server PRIVATE dl)
+    endif()
     target_compile_definitions(kaikai_headless_server PRIVATE
         KAIKAI_SERVER
         KAIKAI_HEADLESS

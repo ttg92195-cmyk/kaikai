@@ -368,7 +368,7 @@ void Renderer::renderGame(const Game& game, const PlayerState& localPlayer)
     // Check if scene texture is valid before rendering
     if (sceneTexture.id == 0) {
         // No render texture - render directly to screen as fallback
-        BeginDrawing();
+        // Note: beginFrame() already called BeginDrawing(), so don't nest it
         ClearBackground({5, 3, 10, 255});
         BeginMode3D(camera);
 
@@ -377,7 +377,7 @@ void Renderer::renderGame(const Game& game, const PlayerState& localPlayer)
         renderPlayers(game, localPlayer.id);
 
         EndMode3D();
-        EndDrawing();
+        // Don't call EndDrawing() here - endFrame() will do it
         cachedGame = nullptr;
         return;
     }
