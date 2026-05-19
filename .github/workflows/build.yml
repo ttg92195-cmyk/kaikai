@@ -29,8 +29,9 @@ jobs:
           git clone --depth 1 --branch 5.5 https://github.com/raysan5/raylib.git /tmp/raylib
           cd /tmp/raylib
           mkdir build && cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DSUPPORT_HEADLESS=OFF ..
-          cmake --build . --target install -j$(nproc)
+          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF ..
+          cmake --build . -j$(nproc)
+          sudo cmake --install .
           sudo ldconfig
 
       - name: Configure CMake
@@ -110,6 +111,8 @@ jobs:
             -DANDROID_PLATFORM=android-21 \
             -DCMAKE_BUILD_TYPE=Release \
             -DPLATFORM=Android \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_TESTS=OFF \
             ..
           cmake --build . -j$(nproc)
           cmake --install . --prefix /tmp/raylib-android-install
@@ -170,7 +173,7 @@ jobs:
           if-no-files-found: error
 
   # ==========================================================================
-  # Job 3: Build Windows headless server (cross-compile on Ubuntu)
+  # Job 3: Build Windows headless server (cross-compile on Ubuntu with MinGW)
   # ==========================================================================
   build-windows-server:
     runs-on: ubuntu-latest
@@ -189,12 +192,18 @@ jobs:
             -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
             -DCMAKE_BUILD_TYPE=Release \
             ..
-          echo "Configured for Windows headless server"
 
       - name: Build Windows headless server
         run: |
           cd build-win
           cmake --build . --target kaikai_headless_server -j$(nproc)
+
+      - name: Verify static linking (no DLL dependencies)
+        run: |
+          echo "=== Checking for DLL dependencies ==="
+          x86_64-w64-mingw32-objdump -p build-win/kaikai_headless_server.exe | grep "DLL Name" || echo "No DLL dependencies found (statically linked)"
+          echo "=== File size ==="
+          ls -lh build-win/kaikai_headless_server.exe
 
       - name: Upload Windows headless server
         uses: actions/upload-artifact@v4

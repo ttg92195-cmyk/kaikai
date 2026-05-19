@@ -180,6 +180,11 @@ if(NOT ANDROID)
         KAIKAI_HEADLESS
     )
 
+    # ---- Static linking for MinGW (produces standalone .exe, no DLL deps) ---
+    if(WIN32)
+        target_link_options(kaikai_headless_server PRIVATE -static -static-libgcc -static-libstdc++)
+    endif()
+
     # =========================================================================
     # RAYLIB-DEPENDENT TARGETS (original server + client)
     # =========================================================================
