@@ -48,24 +48,35 @@ jobs:
             libgl1-mesa-dev
 
       # -------------------------------------------------------------------
-      # raylib - bypass credential helper, use anonymous git clone
-      # The runner's GITHUB_TOKEN credential helper blocks access to
-      # other public repos. Bypassing it allows anonymous access which
-      # works fine for public repos.
+      # raylib - bypass ALL git credential interference
+      # The runner's actions/checkout sets up GITHUB_TOKEN credential helper
+      # that intercepts ALL github.com access and blocks other public repos.
+      # Fix: create a completely clean git config environment for the clone.
       # -------------------------------------------------------------------
       - name: Clone and build raylib
+        env:
+          # Ignore system git config (has credential helper)
+          GIT_CONFIG_NOSYSTEM: 1
+          # Don't prompt for credentials - just fail or use anonymous
+          GIT_TERMINAL_PROMPT: 0
         run: |
           RAYLIB_VERSION="5.0"
           
-          echo "=== Removing credential helpers that block public repo access ==="
-          # The actions/checkout step sets up a credential helper with GITHUB_TOKEN
-          # that is scoped to ONLY the current repo. This blocks access to other
-          # public repos like raysan/raylib. We bypass it for this clone.
-          git config --global --unset-all credential.helper 2>/dev/null || true
-          rm -f ~/.netrc 2>/dev/null || true
+          echo "=== Creating clean git config to bypass credential interference ==="
+          # Create a completely clean temporary gitconfig with NO credential helpers
+          CLEAN_GITCONFIG="/tmp/clean-gitconfig"
+          cat > "$CLEAN_GITCONFIG" << 'EOF'
+          [user]
+              name = CI Builder
+              email = builder@ci.local
+          EOF
           
-          echo "=== Cloning raylib ${RAYLIB_VERSION} ==="
-          git clone --depth 1 --branch "${RAYLIB_VERSION}" https://github.com/raysan/raylib.git /tmp/raylib
+          # Point git to our clean config instead of the runner's infected one
+          export GIT_CONFIG_GLOBAL="$CLEAN_GITCONFIG"
+          
+          echo "=== Cloning raylib ${RAYLIB_VERSION} (anonymous, no credentials) ==="
+          git clone --depth 1 --branch "${RAYLIB_VERSION}" \
+            https://github.com/raysan/raylib.git /tmp/raylib
           
           echo "=== Building raylib ==="
           cd /tmp/raylib
@@ -79,7 +90,7 @@ jobs:
           make -j$(nproc)
           sudo make install
           sudo ldconfig
-          echo "=== raylib ${RAYLIB_VERSION} installed ==="
+          echo "=== raylib ${RAYLIB_VERSION} installed successfully ==="
 
       # -------------------------------------------------------------------
       # Verify
