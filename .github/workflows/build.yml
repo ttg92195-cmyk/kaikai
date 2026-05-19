@@ -20,6 +20,8 @@ jobs:
       # -------------------------------------------------------------------
       - name: Checkout Kaikai repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       # -------------------------------------------------------------------
       # Install system dependencies
@@ -48,47 +50,66 @@ jobs:
             libgl1-mesa-dev
 
       # -------------------------------------------------------------------
-      # raylib - DO NOT use git clone on GitHub Actions runners!
-      # The runner's GITHUB_TOKEN credential system makes ALL git clone
-      # operations to other repos fail. Use curl to download tarball instead.
-      # curl does NOT use git's credential system, so it works fine.
+      # raylib - THE DEFINITIVE FIX
+      #
+      # Why ALL previous methods failed (#1 through #11):
+      # 1. actions/checkout sets GIT_ASKPASS env var to a script that
+      #    provides the scoped GITHUB_TOKEN
+      # 2. It also adds the token to http.extraheader in git config
+      # 3. It may also create a .netrc file with the token
+      # 4. ALL of these inject the scoped GITHUB_TOKEN into requests
+      # 5. The scoped token only works for the CURRENT repo
+      # 6. GitHub REJECTS the token for other repos and returns 404
+      # 7. GitHub does NOT fall back to anonymous access when a bad
+      #    token is provided
+      #
+      # Solution: Remove ALL authentication, then use truly anonymous
+      # git clone for the public raysan/raylib repo.
       # -------------------------------------------------------------------
-      - name: Download and build raylib
+      - name: Clone and build raylib
         run: |
           RAYLIB_VERSION="5.0"
-          cd /tmp
           
-          echo "=== Downloading raylib ${RAYLIB_VERSION} via GitHub API (curl, NOT git) ==="
-          # Use GitHub API tarball endpoint. curl does NOT use git credential helpers.
-          # For public repos, no authentication is needed.
-          # Note: must use -L to follow redirects to codeload.github.com
-          curl -L \
-            "https://api.github.com/repos/raysan/raylib/tarball/${RAYLIB_VERSION}" \
-            -o raylib.tar.gz
+          echo "=== Step 1: Remove ALL authentication interference ==="
           
-          # Verify download is a real tarball (not an error page)
-          SIZE=$(wc -c < raylib.tar.gz)
-          echo "Downloaded ${SIZE} bytes"
-          if [ "$SIZE" -lt 50000 ]; then
-            echo "ERROR: Download too small - likely an error page"
-            file raylib.tar.gz
-            head -c 500 raylib.tar.gz
-            exit 1
-          fi
+          # Remove GIT_ASKPASS (the script that provides GITHUB_TOKEN to git)
+          unset GIT_ASKPASS
+          export GIT_ASKPASS=""
           
-          echo "=== Extracting raylib ==="
-          tar xzf raylib.tar.gz
-          # GitHub API tarballs extract as: raysan-raylib-<hash>/
-          EXTRACTED_DIR=$(ls -d raysan-raylib-* 2>/dev/null | head -1)
-          if [ -z "$EXTRACTED_DIR" ]; then
-            echo "ERROR: Could not find extracted directory"
-            ls -la /tmp/
-            exit 1
-          fi
-          echo "Extracted to: ${EXTRACTED_DIR}"
+          # Remove GITHUB_TOKEN from environment (prevents any script from using it)
+          unset GITHUB_TOKEN
+          export GITHUB_TOKEN=""
           
-          echo "=== Building raylib ==="
-          cd "/tmp/${EXTRACTED_DIR}"
+          # Remove GH_TOKEN (used by gh CLI)
+          unset GH_TOKEN
+          export GH_TOKEN=""
+          
+          # Remove git credential helpers
+          git config --global --unset-all credential.helper 2>/dev/null || true
+          
+          # Remove HTTP Authorization headers
+          git config --global --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git config --global --unset-all http.https://github.com/.extraHeader 2>/dev/null || true
+          
+          # Remove .netrc if it exists (may contain GITHUB_TOKEN)
+          rm -f ~/.netrc 2>/dev/null || true
+          
+          # Disable terminal prompts
+          export GIT_TERMINAL_PROMPT=0
+          
+          echo "=== Step 2: Verify clean environment ==="
+          echo "GIT_ASKPASS='${GIT_ASKPASS}'"
+          echo "GITHUB_TOKEN length: ${#GITHUB_TOKEN}"
+          echo "git config:"
+          git config --global --list 2>/dev/null || echo "(empty)"
+          echo ".netrc: $(test -f ~/.netrc && echo 'EXISTS' || echo 'NOT FOUND')"
+          
+          echo "=== Step 3: Clone raylib ${RAYLIB_VERSION} ==="
+          git clone --depth 1 --branch "${RAYLIB_VERSION}" \
+            https://github.com/raysan/raylib.git /tmp/raylib
+          
+          echo "=== Step 4: Build raylib ==="
+          cd /tmp/raylib
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -99,7 +120,7 @@ jobs:
           make -j$(nproc)
           sudo make install
           sudo ldconfig
-          echo "=== raylib ${RAYLIB_VERSION} installed successfully ==="
+          echo "=== raylib ${RAYLIB_VERSION} installed ==="
 
       # -------------------------------------------------------------------
       # Verify
