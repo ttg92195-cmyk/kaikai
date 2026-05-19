@@ -202,24 +202,14 @@ if(ANDROID)
         endif()
     endif()
 
-    # NDK r23+ moved native_app_glue to a CMake package; older NDKs use source files
-    find_package(native_app_glue QUIET CONFIG)
-    if(NOT native_app_glue_FOUND)
-        message(STATUS "Building native_app_glue from NDK source: ${ANDROID_NDK}")
-        if(EXISTS "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
-            add_library(native_app_glue STATIC
-                ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
-            )
-            target_include_directories(native_app_glue PUBLIC
-                ${ANDROID_NDK}/sources/android/native_app_glue
-            )
-        else()
-            # NDK r23+: use the CMake-installed version
-            message(FATAL_ERROR
-                "native_app_glue not found! Check NDK version and path: ${ANDROID_NDK}")
-        endif()
-        add_library(native_app_glue::native_app_glue ALIAS native_app_glue)
-    endif()
+    message(STATUS "ANDROID_NDK path: ${ANDROID_NDK}")
+    message(STATUS "Looking for native_app_glue...")
+
+    # NDK r23+ provides native_app_glue as a CMake package.
+    # Add the NDK's cmake directory to the search path so find_package can locate it.
+    set(native_app_glue_DIR "${ANDROID_NDK}/build/cmake")
+    find_package(native_app_glue REQUIRED CONFIG)
+    message(STATUS "native_app_glue found via CMake package")
 
     # ---- ENet for Android (include sources directly in shared library) ------
     include(FetchContent)
@@ -233,6 +223,7 @@ if(ANDROID)
         FetchContent_Populate(enet_android)
     endif()
     # Build ENet sources directly into the shared library (avoids static lib linking issues)
+    # ENet v1.3.17 only has these 7 source files (no unix.c / win32.c)
     set(ENET_ANDROID_SOURCES
         ${enet_android_SOURCE_DIR}/callbacks.c
         ${enet_android_SOURCE_DIR}/compress.c
@@ -241,7 +232,6 @@ if(ANDROID)
         ${enet_android_SOURCE_DIR}/packet.c
         ${enet_android_SOURCE_DIR}/peer.c
         ${enet_android_SOURCE_DIR}/protocol.c
-        ${enet_android_SOURCE_DIR}/unix.c
     )
 
     # ---- Android shared library target --------------------------------------

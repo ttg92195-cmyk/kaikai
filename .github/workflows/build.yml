@@ -113,6 +113,15 @@ jobs:
   # =========================================================================
   # JOB 2: Build Android APK (arm64-v8a)
   # =========================================================================
+  # This builds a REAL Android APK from C++/raylib code using:
+  #   - Android NDK r26 for cross-compilation
+  #   - raylib built for Android (PLATFORM=Android, OpenGL ES 3.0)
+  #   - native_app_glue for NativeActivity entry point
+  #   - Gradle for APK packaging
+  #
+  # The APK uses android.app.NativeActivity (no Java code needed).
+  # raylib's platform_android code wraps android_main() -> main().
+  # =========================================================================
   build-android:
     runs-on: ubuntu-latest
 
@@ -136,6 +145,8 @@ jobs:
         run: |
           sdkmanager --install "ndk;26.1.10909125" "build-tools;34.0.0" "platforms;android-34"
           echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/26.1.10909125" >> $GITHUB_ENV
+          echo "NDK version installed:"
+          ls -la ${ANDROID_HOME}/ndk/ 2>/dev/null || true
 
       # -------------------------------------------------------------------
       # Build raylib for Android (arm64-v8a, OpenGL ES 3.0)
@@ -148,6 +159,9 @@ jobs:
           git clone https://github.com/raysan5/raylib.git --branch ${RAYLIB_VERSION} --depth 1 /tmp/raylib
 
           echo "=== Building raylib ${RAYLIB_VERSION} for Android arm64-v8a ==="
+          echo "NDK path: ${ANDROID_NDK_HOME}"
+          ls "${ANDROID_NDK_HOME}/build/cmake/" 2>/dev/null || echo "NDK cmake dir not found!"
+
           mkdir -p /tmp/raylib/build-android && cd /tmp/raylib/build-android
           cmake .. \
             -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
@@ -163,14 +177,16 @@ jobs:
           make install
           echo "=== raylib for Android installed ==="
           ls -la /tmp/raylib-android/lib/
-          echo "=== Checking raylib symbols ==="
-          nm /tmp/raylib-android/lib/libraylib.a 2>/dev/null | grep -i "android_main\|ANativeActivity_onCreate" || echo "Note: android_main/ANativeActivity_onCreate not in raylib static lib (expected - provided by native_app_glue)"
+          ls -la /tmp/raylib-android/include/
 
       # -------------------------------------------------------------------
       # Build native shared library with CMake
       # -------------------------------------------------------------------
       - name: Configure CMake for Android
         run: |
+          echo "=== Configuring CMake for Android ==="
+          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}"
+
           cmake -B build-android \
             -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
@@ -179,10 +195,16 @@ jobs:
             -DCMAKE_PREFIX_PATH=/tmp/raylib-android \
             -DCMAKE_FIND_ROOT_PATH=/tmp/raylib-android \
             -Draylib_DIR=/tmp/raylib-android/lib/cmake/raylib \
-            -DANDROID_STL=c++_static
+            -DANDROID_STL=c++_static \
+            -DANDROID_NDK=${ANDROID_NDK_HOME} \
+            2>&1 | tee cmake_android_output.txt
+
+          echo "=== CMake configure result ==="
+          grep -i "error\|native_app_glue\|raylib" cmake_android_output.txt || true
 
       - name: Build native library
         run: |
+          echo "=== Building native library ==="
           cmake --build build-android --config Release -j$(nproc) 2>&1 | tail -200
 
       # -------------------------------------------------------------------
@@ -200,12 +222,14 @@ jobs:
             echo "=== Checking exported symbols ==="
             ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm \
               --dynamic build-android/libkaikai_android.so 2>/dev/null | \
-              grep -i "ANativeActivity_onCreate\|android_main\|main" || echo "Note: using readelf instead"
-            
+              grep -i "ANativeActivity_onCreate\|android_main\|main" || echo "Note: checking with readelf instead"
+
             readelf -s build-android/libkaikai_android.so 2>/dev/null | \
-              grep -i "ANativeActivity_onCreate" || echo "Warning: ANativeActivity_onCreate not found in .so!"
+              grep -i "ANativeActivity_onCreate" && echo "SUCCESS: ANativeActivity_onCreate found!" || echo "WARNING: ANativeActivity_onCreate NOT found in .so!"
           else
             echo "ERROR: libkaikai_android.so not found!"
+            echo "=== Checking what was built ==="
+            find build-android -type f -name "*.so" -o -name "*.a" 2>/dev/null || true
             exit 1
           fi
 
@@ -250,20 +274,22 @@ jobs:
             APK_SIZE=$(stat -c%s "$APK_FILE")
             echo "APK: $APK_FILE"
             echo "APK size: ${APK_SIZE} bytes ($(( APK_SIZE / 1024 )) KB)"
-            
+
             echo "=== APK contents ==="
-            unzip -l "$APK_FILE" 2>/dev/null | grep -E "\.so$|classes|manifest" || true
-            
+            unzip -l "$APK_FILE" 2>/dev/null | head -40
+
             echo "=== Native libs in APK ==="
-            unzip -l "$APK_FILE" 2>/dev/null | grep "\.so$" || true
+            unzip -l "$APK_FILE" 2>/dev/null | grep "\.so$" || echo "WARNING: No .so files found in APK!"
+
+            echo "=== Checking for libkaikai_android.so ==="
+            unzip -l "$APK_FILE" 2>/dev/null | grep "kaikai_android" && echo "SUCCESS: Native library is in APK!" || echo "ERROR: Native library NOT in APK!"
           else
             echo "Warning: No APK found"
           fi
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: kaikai-android-arm64-debug
           path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
+          if-no-files-found: error
