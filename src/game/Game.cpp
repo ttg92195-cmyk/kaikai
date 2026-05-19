@@ -1,5 +1,7 @@
 #include "Game.h"
+#if !defined(KAIKAI_HEADLESS)
 #include "raymath.h"
+#endif
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
@@ -63,6 +65,7 @@ void Game::update(float deltaTime) {
 // ---------------------------------------------------------------------------
 
 void Game::render() {
+#if !defined(KAIKAI_HEADLESS)
     switch (gameState) {
         case GameState::LOBBY:
             renderLobbyScreen();
@@ -87,6 +90,7 @@ void Game::render() {
             renderGameOverScreen();
             break;
     }
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -533,12 +537,21 @@ void Game::playerUseItem(uint32_t playerId, uint32_t itemId) {
 void Game::updateLobby(float deltaTime) {
     lobbyTimer += deltaTime;
 
+    // Auto-start with enough players
+#if defined(KAIKAI_HEADLESS)
+    if (players.size() >= 2 && lobbyTimer > 3.0f) {
+        if (players.size() >= 1) {
+            startGame();
+        }
+    }
+#else
     // Auto-start with enough players, or manual start with ENTER
     if (IsKeyPressed(KEY_ENTER) || (players.size() >= 2 && lobbyTimer > 3.0f)) {
         if (players.size() >= 1) {
             startGame();
         }
     }
+#endif
 }
 
 void Game::updatePlaying(float deltaTime) {
@@ -572,13 +585,15 @@ void Game::updatePlaying(float deltaTime) {
     // Two-player switch logic
     handleTwoPlayerSwitches();
 
-    // Release switches when E key is released
+    // Release switches when E key is released (client-side only)
+#if !defined(KAIKAI_HEADLESS)
     if (IsKeyReleased(KEY_E)) {
         for (auto& [swId, pids] : switchPlayersPressing) {
             gameMap.releaseSwitch(swId);
         }
         switchPlayersPressing.clear();
     }
+#endif
 
     // Ghost auto-catch when in range and cooldown is ready
     if (ghost && ghost->canCatch()) {
@@ -605,6 +620,7 @@ void Game::updatePlaying(float deltaTime) {
 void Game::updateGameOver(float deltaTime) {
     (void)deltaTime;
 
+#if !defined(KAIKAI_HEADLESS)
     if (IsKeyPressed(KEY_ENTER)) {
         gameState = GameState::LOBBY;
         lobbyTimer = 0.0f;
@@ -616,6 +632,7 @@ void Game::updateGameOver(float deltaTime) {
         }
         ghostPlayerId = 0;
     }
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -694,6 +711,7 @@ void Game::checkWinConditions() {
 // ---------------------------------------------------------------------------
 
 void Game::renderHUD() const {
+#if !defined(KAIKAI_HEADLESS)
     const PlayerState* localState = nullptr;
     for (const auto& [id, player] : players) {
         if (id == localPlayerId || (!isServer && localPlayerId == 0)) {
@@ -812,6 +830,7 @@ void Game::renderHUD() const {
         DrawRectangle(0, 0, 40, screenHeight, vignetteColor);
         DrawRectangle(screenWidth - 40, 0, 40, screenHeight, vignetteColor);
     }
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -819,6 +838,7 @@ void Game::renderHUD() const {
 // ---------------------------------------------------------------------------
 
 void Game::renderLobbyScreen() const {
+#if !defined(KAIKAI_HEADLESS)
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
@@ -840,6 +860,7 @@ void Game::renderLobbyScreen() const {
     DrawText("Press ENTER to start the game", screenWidth / 2 - 160, screenHeight - 100, 20, YELLOW);
     DrawText("Minimum 2 players recommended (1 ghost + 1 survivor)",
              screenWidth / 2 - 250, screenHeight - 70, 16, GRAY);
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -847,6 +868,7 @@ void Game::renderLobbyScreen() const {
 // ---------------------------------------------------------------------------
 
 void Game::renderGameOverScreen() const {
+#if !defined(KAIKAI_HEADLESS)
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
@@ -861,4 +883,5 @@ void Game::renderGameOverScreen() const {
     }
 
     DrawText("Press ENTER to return to lobby", screenWidth / 2 - 160, screenHeight / 2 + 80, 20, YELLOW);
+#endif
 }

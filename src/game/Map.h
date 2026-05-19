@@ -2,7 +2,11 @@
 #include <cstdint>
 #include <vector>
 #include <string>
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#else
 #include "raylib.h"
+#endif
 
 struct Door {
     Vector3 position = {0, 0, 0};

@@ -1,7 +1,13 @@
 #include "GhostAI.h"
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#endif
 #include <algorithm>
 #include <cmath>
 #include <cfloat>
+#if defined(KAIKAI_HEADLESS)
+#include <chrono>
+#endif
 
 static constexpr float CATCH_DISTANCE = 2.0f;
 static constexpr float CHASE_GIVE_UP_DISTANCE = 20.0f;
@@ -364,7 +370,14 @@ const PlayerState* GhostAI::findNearestPlayer(const std::vector<PlayerState>& pl
 
 void GhostAI::processSounds() {
     // Remove expired sounds (older than 10 seconds game time)
+#if defined(KAIKAI_HEADLESS)
+    // In headless mode, use a simple steady_clock based time
+    static auto startChrono = std::chrono::steady_clock::now();
+    float currentTime = std::chrono::duration<float>(
+        std::chrono::steady_clock::now() - startChrono).count();
+#else
     float currentTime = static_cast<float>(GetTime());
+#endif
     pendingSounds.erase(
         std::remove_if(pendingSounds.begin(), pendingSounds.end(),
             [currentTime](const SoundEvent& s) {

@@ -66,8 +66,8 @@ void JumpscareSystem::triggerJumpscare(uint32_t playerId, Vector3 ghostPos, floa
     aloneTimer = 0.0f;
 }
 
+#if !defined(KAIKAI_HEADLESS)
 void JumpscareSystem::render(const Camera3D& camera) const {
-    // Render all active jumpscares for the local player
     for (const auto& event : activeJumpscares) {
         if (!event.active) continue;
 
@@ -199,7 +199,9 @@ void JumpscareSystem::render(const Camera3D& camera) const {
         }
     }
 }
+#endif // !KAIKAI_HEADLESS
 
+#if !defined(KAIKAI_HEADLESS)
 void JumpscareSystem::renderFlashEffect() const {
     if (screenFlashAlpha <= 0.0f) return;
 
@@ -207,6 +209,7 @@ void JumpscareSystem::renderFlashEffect() const {
     Color flashColor = { 255, 255, 255, (unsigned char)(screenFlashAlpha * 255) };
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), flashColor);
 }
+#endif // !KAIKAI_HEADLESS
 
 bool JumpscareSystem::isActive() const {
     for (const auto& event : activeJumpscares) {

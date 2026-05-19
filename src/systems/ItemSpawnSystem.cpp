@@ -72,6 +72,7 @@ Vector3 ItemSpawnSystem::getRandomFloorPosition(const uint8_t* gridData) const {
     return spawnPositions[idx];
 }
 
+#if !defined(KAIKAI_HEADLESS)
 void ItemSpawnSystem::render() const {
     for (const auto& item : items) {
         if (item.active) {
@@ -79,6 +80,7 @@ void ItemSpawnSystem::render() const {
         }
     }
 }
+#endif
 
 void ItemSpawnSystem::collectValidPositions(const uint8_t* gridData) {
     spawnPositions.clear();
@@ -262,9 +264,9 @@ void ItemSpawnSystem::spawnItems() {
     }
 }
 
+#if !defined(KAIKAI_HEADLESS)
 void ItemSpawnSystem::renderItem(const SpawnedItem& item) const {
     float time = (float)GetTime();
-
     // Common animation: bobbing up and down
     float bobOffset = sinf(time * 2.0f + item.position.x * 0.5f + item.position.z * 0.7f) * 0.1f;
     Vector3 renderPos = item.position;
@@ -421,3 +423,4 @@ void ItemSpawnSystem::renderItem(const SpawnedItem& item) const {
         DrawSphere(particlePos, 0.015f, particleColor);
     }
 }
+#endif // !KAIKAI_HEADLESS

@@ -52,7 +52,9 @@ endif()
 if(NOT ANDROID)
 
     # ---- raylib (desktop) ---------------------------------------------------
-    # First: try CMake find_package (works if raylib was installed via cmake install)
+    # raylib is only required for the client and the original (raylib-linked)
+    # server target.  The headless server builds without it.
+    set(RAYLIB_AVAILABLE FALSE)
     find_package(raylib QUIET)
 
     if(NOT raylib_FOUND)
@@ -73,13 +75,11 @@ if(NOT ANDROID)
                 INTERFACE_INCLUDE_DIRECTORIES "${RAYLIB_INC_PATH}"
             )
             set(raylib_FOUND TRUE)
+            set(RAYLIB_AVAILABLE TRUE)
         else()
-            message(FATAL_ERROR
-                "raylib NOT found!\n"
-                "Install with: sudo apt-get install libraylib-dev\n"
-                "Or build from source: https://github.com/raysan5/raylib\n"
-                "CMAKE_PREFIX_PATH was: ${CMAKE_PREFIX_PATH}"
-            )
+            message(STATUS "raylib NOT found — kaikai_server and kaikai_client will not be built.")
+            message(STATUS "Install raylib (sudo apt-get install libraylib-dev) for those targets.")
+            message(STATUS "The headless server (kaikai_headless_server) can be built without raylib.")
         endif()
     else()
         message(STATUS "raylib found via CMake find_package: ${raylib_VERSION}")
@@ -88,6 +88,7 @@ if(NOT ANDROID)
         if(NOT TARGET raylib::raylib)
             add_library(raylib::raylib ALIAS raylib)
         endif()
+        set(RAYLIB_AVAILABLE TRUE)
     endif()
 
     # ---- ENet (desktop) -----------------------------------------------------
@@ -119,6 +120,7 @@ if(NOT ANDROID)
             ${enet_SOURCE_DIR}/packet.c
             ${enet_SOURCE_DIR}/peer.c
             ${enet_SOURCE_DIR}/protocol.c
+            ${enet_SOURCE_DIR}/unix.c
         )
         target_include_directories(enet PUBLIC ${enet_SOURCE_DIR}/include)
         target_compile_definitions(enet PUBLIC HAS_SOCKLEN_T=1)
@@ -127,7 +129,53 @@ if(NOT ANDROID)
         set(ENET_INCLUDE_DIRS ${enet_SOURCE_DIR}/include)
     endif()
 
-    # ---- Server target (headless) -------------------------------------------
+    # =========================================================================
+    # HEADLESS SERVER TARGET (no raylib, no GPU required)
+    # =========================================================================
+    # Only includes the source files needed for server-side game logic,
+    # networking, AI, and systems.  Excludes graphics, audio, and client code.
+    set(KAIKAI_HEADLESS_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/game/Game.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/game/Ghost.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/game/Map.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/game/Player.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/networking/NetworkManager.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/networking/Server.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/Enemy.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/GhostAI.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/Pathfinding.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/StaminaSystem.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/SanitySystem.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/JumpscareSystem.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/SpectatorSystem.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/ItemSpawnSystem.cpp"
+    )
+
+    add_executable(kaikai_headless_server
+        ${KAIKAI_HEADLESS_SOURCES}
+        ${KAIKAI_MAIN}
+    )
+    target_include_directories(kaikai_headless_server PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${ENET_INCLUDE_DIRS}
+    )
+    target_link_libraries(kaikai_headless_server PRIVATE
+        ${ENET_LIBRARIES}
+        Threads::Threads
+        m
+        dl
+    )
+    target_compile_definitions(kaikai_headless_server PRIVATE
+        KAIKAI_SERVER
+        KAIKAI_HEADLESS
+    )
+
+    # =========================================================================
+    # RAYLIB-DEPENDENT TARGETS (original server + client)
+    # =========================================================================
+    if(RAYLIB_AVAILABLE)
+
+    # ---- Server target (links raylib) --------------------------------------
     add_executable(kaikai_server ${KAIKAI_SERVER_SOURCES} ${KAIKAI_MAIN})
     target_include_directories(kaikai_server PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -166,6 +214,8 @@ if(NOT ANDROID)
             COMMENT "Copying assets to output directory"
         )
     endif()
+
+    endif() # RAYLIB_AVAILABLE
 
 endif() # NOT ANDROID (desktop build)
 

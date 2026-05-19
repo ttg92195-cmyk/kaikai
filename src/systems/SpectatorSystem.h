@@ -1,6 +1,10 @@
 #pragma once
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#else
 #include "raylib.h"
 #include "raymath.h"
+#endif
 #include "../networking/PacketTypes.h"
 #include <cstdint>
 #include <vector>
@@ -25,9 +29,11 @@ public:
     // Spectator actions (dead players can perform these)
     void performAction(uint32_t spectatorId, SpectatorAction::Type type);
     
-    // Rendering
+    // Rendering (client-only)
+#if !defined(KAIKAI_HEADLESS)
     void renderSpectatorView(const Camera3D& camera, const PlayerState& spectator) const;
     void renderSpectatorUI() const;
+#endif
     
     // Available actions for current spectator
     const std::vector<SpectatorAction>& getAvailableActions() const;

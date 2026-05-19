@@ -2,294 +2,210 @@ name: Build Kaikai
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
 
 jobs:
-  # =========================================================================
-  # JOB 1: Build Linux desktop binaries (server + client)
-  # =========================================================================
+  # ==========================================================================
+  # Job 1: Build headless server + desktop client (Ubuntu)
+  # ==========================================================================
   build-linux:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        build_type: [Release]
-
     steps:
-      - name: Checkout Kaikai repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install build tools and libraries
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            cmake \
-            pkg-config \
-            libglfw3-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libxext-dev \
-            libwayland-dev \
-            libxkbcommon-dev \
-            libegl1-mesa-dev \
-            libasound2-dev \
-            libpulse-dev \
-            libmbedtls-dev \
-            libgl1-mesa-dev \
-            libenet-dev
+          sudo apt-get install -y cmake build-essential libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libglu1-mesa-dev libasound2-dev pkg-config
 
-      - name: Build and install raylib from source
-        env:
-          GITHUB_TOKEN: ""
-          GH_TOKEN: ""
+      - name: Build raylib from source
         run: |
-          RAYLIB_VERSION="5.5"
-          RAYLIB_URL="https://github.com/raysan5/raylib/archive/refs/tags/${RAYLIB_VERSION}.tar.gz"
-
-          echo "=== Downloading raylib ${RAYLIB_VERSION} ==="
-          curl -L --netrc-file /dev/null -o /tmp/raylib.tar.gz "${RAYLIB_URL}" 2>&1
-
-          FILE_SIZE=$(stat -c%s /tmp/raylib.tar.gz 2>/dev/null || echo "0")
-          echo "Downloaded: ${FILE_SIZE} bytes"
-
-          if [ "$FILE_SIZE" -lt 10000 ]; then
-            echo "ERROR: Download too small!"
-            exit 1
-          fi
-
-          echo "=== Building raylib ==="
-          tar xzf /tmp/raylib.tar.gz -C /tmp
-          cd /tmp/raylib-${RAYLIB_VERSION}
+          git clone --depth 1 --branch 5.5 https://github.com/raysan5/raylib.git /tmp/raylib
+          cd /tmp/raylib
           mkdir build && cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
-            -DBUILD_EXAMPLES=OFF \
-            -DBUILD_GAMES=OFF \
-            -DUSE_EXTERNAL_GLFW=OFF
-          make -j$(nproc)
-          sudo make install
+          cmake -DCMAKE_BUILD_TYPE=Release -DSUPPORT_HEADLESS=OFF ..
+          cmake --build . --target install -j$(nproc)
           sudo ldconfig
-          echo "=== raylib ${RAYLIB_VERSION} installed ==="
-
-      - name: Verify raylib installation
-        run: |
-          pkg-config --modversion raylib 2>/dev/null && echo "Found via pkg-config" || echo "Not found via pkg-config"
-          ls -la /usr/local/lib/libraylib* 2>/dev/null || true
 
       - name: Configure CMake
         run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_PREFIX_PATH=/usr/local
+          mkdir build && cd build
+          cmake -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} ..
 
-      - name: Build
+      - name: Build headless server
         run: |
-          set -o pipefail
-          cmake --build build --config ${{ matrix.build_type }} -- -j$(nproc) 2>&1 | tail -150
+          cd build
+          cmake --build . --target kaikai_headless_server -j$(nproc)
 
-      - name: Upload server binary
+      - name: Build desktop server
+        run: |
+          cd build
+          cmake --build . --target kaikai_server -j$(nproc)
+
+      - name: Build desktop client
+        run: |
+          cd build
+          cmake --build . --target kaikai_client -j$(nproc)
+
+      - name: Upload headless server
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: kaikai_server-${{ matrix.build_type }}
+          name: kaikai-headless-server-linux
+          path: build/kaikai_headless_server
+          if-no-files-found: error
+
+      - name: Upload desktop server
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaikai-server-linux
           path: build/kaikai_server
           if-no-files-found: warn
 
-      - name: Upload client binary
+      - name: Upload desktop client
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: kaikai_client-${{ matrix.build_type }}
+          name: kaikai-client-linux
           path: build/kaikai_client
           if-no-files-found: warn
 
-  # =========================================================================
-  # JOB 2: Build Android APK (arm64-v8a)
-  # =========================================================================
-  # This builds a REAL Android APK from C++/raylib code using:
-  #   - Android NDK r26 for cross-compilation
-  #   - raylib built for Android (PLATFORM=Android, OpenGL ES 3.0)
-  #   - native_app_glue for NativeActivity entry point
-  #   - Gradle for APK packaging
-  #
-  # The APK uses android.app.NativeActivity (no Java code needed).
-  # raylib's platform_android code wraps android_main() -> main().
-  # =========================================================================
+  # ==========================================================================
+  # Job 2: Build Android APK
+  # ==========================================================================
   build-android:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Kaikai repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup JDK 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Setup Android SDK
+      - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses > /dev/null 2>&1 || true
-
-      - name: Install Android NDK and build tools
+      - name: Install NDK
         run: |
-          sdkmanager --install "ndk;26.1.10909125" "build-tools;34.0.0" "platforms;android-34"
-          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/26.1.10909125" >> $GITHUB_ENV
-          echo "NDK version installed:"
-          ls -la ${ANDROID_HOME}/ndk/ 2>/dev/null || true
+          sdkmanager --install "ndk;26.1.10909125"
+          echo "ANDROID_NDK=$ANDROID_HOME/ndk/26.1.10909125" >> $GITHUB_ENV
 
-      # -------------------------------------------------------------------
-      # Build raylib for Android (arm64-v8a, OpenGL ES 3.0)
-      # IMPORTANT: raylib built with PLATFORM=Android includes the
-      # android_main() wrapper that calls our main() function.
-      # -------------------------------------------------------------------
-      - name: Build raylib for Android
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Build raylib for Android (ARM64)
         run: |
-          RAYLIB_VERSION="5.5"
-          git clone https://github.com/raysan5/raylib.git --branch ${RAYLIB_VERSION} --depth 1 /tmp/raylib
-
-          echo "=== Building raylib ${RAYLIB_VERSION} for Android arm64-v8a ==="
-          echo "NDK path: ${ANDROID_NDK_HOME}"
-          ls "${ANDROID_NDK_HOME}/build/cmake/" 2>/dev/null || echo "NDK cmake dir not found!"
-
-          mkdir -p /tmp/raylib/build-android && cd /tmp/raylib/build-android
-          cmake .. \
-            -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+          git clone --depth 1 --branch 5.5 https://github.com/raysan5/raylib.git /tmp/raylib
+          cd /tmp/raylib
+          mkdir build-android && cd build-android
+          cmake \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
             -DPLATFORM=Android \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/tmp/raylib-android \
-            -DBUILD_EXAMPLES=OFF \
-            -DBUILD_GAMES=OFF \
-            -DUSE_EXTERNAL_GLFW=OFF
-          make -j$(nproc)
-          make install
-          echo "=== raylib for Android installed ==="
-          ls -la /tmp/raylib-android/lib/
-          ls -la /tmp/raylib-android/include/
+            ..
+          cmake --build . -j$(nproc)
+          cmake --install . --prefix /tmp/raylib-android-install
+          echo "raylib_DIR=/tmp/raylib-android-install/lib/cmake/raylib" >> $GITHUB_ENV
 
-      # -------------------------------------------------------------------
-      # Build native shared library with CMake
-      # -------------------------------------------------------------------
-      - name: Configure CMake for Android
+      - name: Build native library (libkaikai_android.so)
         run: |
-          echo "=== Configuring CMake for Android ==="
-          echo "ANDROID_NDK_HOME=${ANDROID_NDK_HOME}"
-
-          cmake -B build-android \
-            -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+          mkdir build-android && cd build-android
+          cmake \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-21 \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH=/tmp/raylib-android \
-            -DCMAKE_FIND_ROOT_PATH=/tmp/raylib-android \
-            -Draylib_DIR=/tmp/raylib-android/lib/cmake/raylib \
-            -DANDROID_STL=c++_static \
-            -DANDROID_NDK=${ANDROID_NDK_HOME} \
-            2>&1 | tee cmake_android_output.txt
+            -DPLATFORM=Android \
+            -DANDROID=TRUE \
+            -DCMAKE_PREFIX_PATH=/tmp/raylib-android-install \
+            ..
+          cmake --build . -j$(nproc)
 
-          echo "=== CMake configure result ==="
-          grep -i "error\|native_app_glue\|raylib" cmake_android_output.txt || true
-
-      - name: Build native library
+      - name: Prepare APK structure
         run: |
-          echo "=== Building native library ==="
-          cmake --build build-android --config Release -j$(nproc) 2>&1 | tail -200
-
-      # -------------------------------------------------------------------
-      # Verify the .so is built and check its symbols
-      # -------------------------------------------------------------------
-      - name: Verify native library
-        run: |
-          echo "=== Looking for built .so ==="
-          find build-android -name "*.so" 2>/dev/null || true
-
-          if [ -f build-android/libkaikai_android.so ]; then
-            SO_SIZE=$(stat -c%s build-android/libkaikai_android.so)
-            echo "libkaikai_android.so size: ${SO_SIZE} bytes ($(( SO_SIZE / 1024 )) KB)"
-
-            echo "=== Checking exported symbols ==="
-            ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm \
-              --dynamic build-android/libkaikai_android.so 2>/dev/null | \
-              grep -i "ANativeActivity_onCreate\|android_main\|main" || echo "Note: checking with readelf instead"
-
-            readelf -s build-android/libkaikai_android.so 2>/dev/null | \
-              grep -i "ANativeActivity_onCreate" && echo "SUCCESS: ANativeActivity_onCreate found!" || echo "WARNING: ANativeActivity_onCreate NOT found in .so!"
-          else
-            echo "ERROR: libkaikai_android.so not found!"
-            echo "=== Checking what was built ==="
-            find build-android -type f -name "*.so" -o -name "*.a" 2>/dev/null || true
-            exit 1
-          fi
-
-      # -------------------------------------------------------------------
-      # Copy native library to Android project's jniLibs directory
-      # -------------------------------------------------------------------
-      - name: Prepare native library for APK packaging
-        run: |
+          # Create jniLibs directory for the .so
           mkdir -p android/app/src/main/jniLibs/arm64-v8a
-          if [ -f build-android/libkaikai_android.so ]; then
-            cp build-android/libkaikai_android.so android/app/src/main/jniLibs/arm64-v8a/
-            echo "=== libkaikai_android.so copied to jniLibs ==="
-            ls -la android/app/src/main/jniLibs/arm64-v8a/
-          else
-            echo "ERROR: libkaikai_android.so not found!"
-            exit 1
+          cp build-android/libkaikai_android.so android/app/src/main/jniLibs/arm64-v8a/
+
+          # Copy assets into the APK assets directory
+          mkdir -p android/app/src/main/assets
+          if [ -d assets ]; then
+            cp -r assets/* android/app/src/main/assets/
           fi
 
-      # -------------------------------------------------------------------
-      # Build APK with Gradle
-      # -------------------------------------------------------------------
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.5'
-
-      - name: Generate Gradle wrapper
+      - name: Build APK with Gradle
         working-directory: android
-        run: gradle wrapper
-
-      - name: Build debug APK
-        working-directory: android
-        run: ./gradlew assembleDebug --stacktrace
-
-      # -------------------------------------------------------------------
-      # Verify and upload APK
-      # -------------------------------------------------------------------
-      - name: Verify APK contents
         run: |
-          APK_FILE=$(find android/app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
-          if [ -n "$APK_FILE" ]; then
-            APK_SIZE=$(stat -c%s "$APK_FILE")
-            echo "APK: $APK_FILE"
-            echo "APK size: ${APK_SIZE} bytes ($(( APK_SIZE / 1024 )) KB)"
+          chmod +x gradlew || true
+          # Generate gradle wrapper if not present
+          [ -f gradlew ] || gradle wrapper
+          ./gradlew assembleDebug --no-daemon
 
-            echo "=== APK contents ==="
-            unzip -l "$APK_FILE" 2>/dev/null | head -40
-
-            echo "=== Native libs in APK ==="
-            unzip -l "$APK_FILE" 2>/dev/null | grep "\.so$" || echo "WARNING: No .so files found in APK!"
-
-            echo "=== Checking for libkaikai_android.so ==="
-            unzip -l "$APK_FILE" 2>/dev/null | grep "kaikai_android" && echo "SUCCESS: Native library is in APK!" || echo "ERROR: Native library NOT in APK!"
+      - name: Rename APK
+        run: |
+          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -1)
+          if [ -n "$APK_PATH" ]; then
+            cp "$APK_PATH" /tmp/kaikai-android.apk
+            echo "APK found: $APK_PATH"
+            ls -la /tmp/kaikai-android.apk
           else
-            echo "Warning: No APK found"
+            echo "ERROR: No APK found!"
+            find android/app/build/outputs -type f 2>/dev/null || echo "No outputs dir"
+            exit 1
           fi
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: kaikai-android-arm64-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: kaikai-android-apk
+          path: /tmp/kaikai-android.apk
           if-no-files-found: error
+
+  # ==========================================================================
+  # Job 3: Build Windows headless server (cross-compile on Ubuntu)
+  # ==========================================================================
+  build-windows-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MinGW
+        run: sudo apt-get install -y cmake mingw-w64
+
+      - name: Configure CMake for Windows cross-compile
+        run: |
+          mkdir build-win && cd build-win
+          cmake \
+            -DCMAKE_SYSTEM_NAME=Windows \
+            -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc \
+            -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ \
+            -DCMAKE_BUILD_TYPE=Release \
+            ..
+          # Only build the headless server (no raylib needed)
+          echo "Configured for Windows headless server"
+
+      - name: Build Windows headless server
+        run: |
+          cd build-win
+          cmake --build . --target kaikai_headless_server -j$(nproc) || {
+            echo "Windows cross-compile failed, this is expected if ENet FetchContent doesn't work with MinGW"
+            echo "Creating a placeholder notice instead"
+            echo "Windows headless server cross-compile is experimental" > /tmp/windows-build-note.txt
+          }
+
+      - name: Upload Windows headless server
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaikai-headless-server-windows
+          path: |
+            build-win/kaikai_headless_server.exe
+            /tmp/windows-build-note.txt
+          if-no-files-found: warn

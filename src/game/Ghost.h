@@ -34,9 +34,11 @@ private:
     float catchCooldown = 0.0f;
 
     // Camera for first-person ghost view
+#if !defined(KAIKAI_HEADLESS)
     Camera3D camera;
     float pitch = 0.0f;
     void updateCamera();
+#endif
 
     static constexpr float CATCH_RANGE = 2.0f;
     static constexpr float CATCH_COOLDOWN = 3.0f;

@@ -1,5 +1,9 @@
 #pragma once
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#else
 #include "raylib.h"
+#endif
 #include "../utils/Constants.h"
 #include <cstdint>
 #include <cstring>

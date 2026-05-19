@@ -1,6 +1,10 @@
 #pragma once
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#else
 #include "raylib.h"
 #include "raymath.h"
+#endif
 #include "Pathfinding.h"
 #include "../networking/PacketTypes.h"
 #include <vector>

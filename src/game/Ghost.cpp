@@ -1,5 +1,7 @@
 #include "Ghost.h"
+#if !defined(KAIKAI_HEADLESS)
 #include "raymath.h"
+#endif
 #include <cmath>
 #include <algorithm>
 #include <limits>
@@ -24,12 +26,14 @@ Ghost::Ghost(uint32_t id) {
     state.footstepTimer = 0.0f;
     catchCooldown = 0.0f;
 
+#if !defined(KAIKAI_HEADLESS)
     // Ghost camera – wider FOV for night-vision aesthetic
     camera.position = state.position;
     camera.target = {0.0f, 0.0f, -1.0f};
     camera.up = {0.0f, 1.0f, 0.0f};
     camera.fovy = GHOST_FOV;
     camera.projection = CAMERA_PERSPECTIVE;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -55,6 +59,7 @@ void Ghost::update(float deltaTime, const std::vector<PlayerState>& survivors) {
         if (catchCooldown < 0.0f) catchCooldown = 0.0f;
     }
 
+#if !defined(KAIKAI_HEADLESS)
     // --- Ghost input (ghost player controls directly) ---
     Vector2 mouseDelta = GetMouseDelta();
     rotate(mouseDelta.x);
@@ -83,13 +88,16 @@ void Ghost::update(float deltaTime, const std::vector<PlayerState>& survivors) {
             catchPlayer(nearestId);
         }
     }
+#endif
 
     // --- Night vision: ghost always has full visibility ---
     // No battery drain, no flashlight needed
     state.battery = 100.0f;
     state.flashlightOn = false;
 
+#if !defined(KAIKAI_HEADLESS)
     updateCamera();
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -163,10 +171,15 @@ uint32_t Ghost::findNearestSurvivor(const std::vector<PlayerState>& survivors) c
 
 void Ghost::moveForward(float deltaTime) {
     float speed = GHOST_SPEED;
+#if !defined(KAIKAI_HEADLESS)
     if (IsKeyDown(KEY_LEFT_SHIFT)) speed = GHOST_SPEED * 1.5f; // ghost sprint
 
     float yaw = state.rotation;
     Vector3 forward = {sinf(yaw) * cosf(pitch), sinf(pitch), cosf(yaw) * cosf(pitch)};
+#else
+    float yaw = state.rotation;
+    Vector3 forward = {sinf(yaw), 0.0f, cosf(yaw)};
+#endif
 
     state.position.x += forward.x * speed * deltaTime;
     state.position.y += forward.y * speed * deltaTime;
@@ -179,10 +192,15 @@ void Ghost::moveForward(float deltaTime) {
 
 void Ghost::moveBackward(float deltaTime) {
     float speed = GHOST_SPEED;
+#if !defined(KAIKAI_HEADLESS)
     if (IsKeyDown(KEY_LEFT_SHIFT)) speed = GHOST_SPEED * 1.5f;
 
     float yaw = state.rotation;
     Vector3 forward = {sinf(yaw) * cosf(pitch), sinf(pitch), cosf(yaw) * cosf(pitch)};
+#else
+    float yaw = state.rotation;
+    Vector3 forward = {sinf(yaw), 0.0f, cosf(yaw)};
+#endif
 
     state.position.x -= forward.x * speed * deltaTime;
     state.position.y -= forward.y * speed * deltaTime;
@@ -194,7 +212,9 @@ void Ghost::moveBackward(float deltaTime) {
 
 void Ghost::moveLeft(float deltaTime) {
     float speed = GHOST_SPEED;
+#if !defined(KAIKAI_HEADLESS)
     if (IsKeyDown(KEY_LEFT_SHIFT)) speed = GHOST_SPEED * 1.5f;
+#endif
 
     float yaw = state.rotation;
     Vector3 right = {cosf(yaw), 0.0f, -sinf(yaw)};
@@ -205,7 +225,9 @@ void Ghost::moveLeft(float deltaTime) {
 
 void Ghost::moveRight(float deltaTime) {
     float speed = GHOST_SPEED;
+#if !defined(KAIKAI_HEADLESS)
     if (IsKeyDown(KEY_LEFT_SHIFT)) speed = GHOST_SPEED * 1.5f;
+#endif
 
     float yaw = state.rotation;
     Vector3 right = {cosf(yaw), 0.0f, -sinf(yaw)};
@@ -223,6 +245,7 @@ void Ghost::rotate(float deltaX) {
 // Camera
 // ---------------------------------------------------------------------------
 
+#if !defined(KAIKAI_HEADLESS)
 void Ghost::updateCamera() {
     float eyeHeight = GHOST_EYE_HEIGHT + state.position.y;
 
@@ -246,3 +269,4 @@ void Ghost::updateCamera() {
     camera.fovy = GHOST_FOV;
     camera.projection = CAMERA_PERSPECTIVE;
 }
+#endif // !KAIKAI_HEADLESS

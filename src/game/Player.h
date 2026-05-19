@@ -2,7 +2,11 @@
 
 #include "../networking/PacketTypes.h"
 #include "../utils/Constants.h"
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#else
 #include "raylib.h"
+#endif
 #include <cstdint>
 
 // PlayerState is defined in networking/PacketTypes.h (canonical definition).
@@ -19,7 +23,9 @@ public:
     const PlayerState& getState() const;
     PlayerState& getStateMut();
     uint32_t getId() const;
+#if !defined(KAIKAI_HEADLESS)
     Camera3D getCamera() const;
+#endif
 
     // Movement
     void moveForward(float deltaTime);
@@ -48,12 +54,14 @@ private:
     bool isRunning = false;
     Vector3 moveDirection = { 0.0f, 0.0f, 0.0f };
 
+#if !defined(KAIKAI_HEADLESS)
     // Camera
     Camera3D camera;
     float headBobAmplitude = 0.0f;
     float headBobPhase     = 0.0f;
     float pitch            = 0.0f;   // Vertical look angle
     void updateCamera();
+#endif
 
     // Map constants for collision (from Kaikai namespace)
     static constexpr int32_t MAP_W = Kaikai::MAP_WIDTH;

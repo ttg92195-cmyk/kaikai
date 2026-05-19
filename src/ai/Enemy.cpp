@@ -65,9 +65,11 @@ void Enemy::update(float deltaTime, const std::vector<PlayerState>& players, con
     }
 }
 
+#if !defined(KAIKAI_HEADLESS)
 void Enemy::render() const {
     renderModel();
 }
+#endif
 
 void Enemy::detectSound(Vector3 soundPos, float soundRadius) {
     float dist = Vector3Distance(position, soundPos);
@@ -247,6 +249,7 @@ void Enemy::chase(float deltaTime, const std::vector<PlayerState>& players, cons
 
 // ---- Rendering ----
 
+#if !defined(KAIKAI_HEADLESS)
 void Enemy::renderModel() const {
     // Floating animation offset
     float floatOffset = std::sin(animationTime * 2.0f) * 0.15f;
@@ -432,6 +435,7 @@ void Enemy::renderModel() const {
         DrawSphere({ px, py, pz }, 0.08f + i * 0.02f, wispColor);
     }
 }
+#endif // !KAIKAI_HEADLESS
 
 // ---- Helpers ----
 

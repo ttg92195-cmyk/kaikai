@@ -1,6 +1,10 @@
 #pragma once
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#else
 #include "raylib.h"
 #include "raymath.h"
+#endif
 #include "Pathfinding.h"
 #include "../networking/PacketTypes.h"
 #include <vector>
@@ -13,7 +17,9 @@ public:
     ~Enemy() = default;
     
     void update(float deltaTime, const std::vector<PlayerState>& players, const uint8_t* gridData);
+#if !defined(KAIKAI_HEADLESS)
     void render() const; // render the enemy model
+#endif
     
     // Sound detection
     void detectSound(Vector3 soundPos, float soundRadius);
@@ -42,7 +48,9 @@ private:
     
     void idle(float deltaTime, const uint8_t* gridData);
     void chase(float deltaTime, const std::vector<PlayerState>& players, const uint8_t* gridData);
+#if !defined(KAIKAI_HEADLESS)
     void renderModel() const; // procedural 3D model using raylib primitives
+#endif
     
     // Helpers
     bool pickRandomValidPosition(const uint8_t* gridData);

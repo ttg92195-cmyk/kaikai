@@ -1,6 +1,10 @@
 #pragma once
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#else
 #include "raylib.h"
 #include "raymath.h"
+#endif
 #include "../networking/PacketTypes.h"
 #include <cstdint>
 #include <vector>
@@ -22,9 +26,11 @@ public:
     // Trigger a jumpscare
     void triggerJumpscare(uint32_t playerId, Vector3 ghostPos, float intensity = 1.0f);
     
-    // Rendering
+    // Rendering (client-only)
+#if !defined(KAIKAI_HEADLESS)
     void render(const Camera3D& camera) const;
     void renderFlashEffect() const; // screen flash
+#endif
     bool isActive() const;
     
     // Dynamic trigger conditions

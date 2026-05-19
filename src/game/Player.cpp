@@ -1,5 +1,7 @@
 #include "Player.h"
+#if !defined(KAIKAI_HEADLESS)
 #include "raymath.h"
+#endif
 #include <cmath>
 #include <algorithm>
 
@@ -21,6 +23,7 @@ Player::Player(uint32_t id) {
     state.isRunning = false;
     state.headBob = 0.0f;
     state.footstepTimer = 0.0f;
+#if !defined(KAIKAI_HEADLESS)
     pitch = 0.0f;
 
     camera.position = state.position;
@@ -30,6 +33,7 @@ Player::Player(uint32_t id) {
     camera.projection = CAMERA_PERSPECTIVE;
 
     updateCamera();
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +43,9 @@ Player::Player(uint32_t id) {
 const PlayerState& Player::getState() const { return state; }
 PlayerState& Player::getStateMut() { return state; }
 uint32_t Player::getId() const { return state.id; }
+#if !defined(KAIKAI_HEADLESS)
 Camera3D Player::getCamera() const { return camera; }
+#endif
 
 // ---------------------------------------------------------------------------
 // Main update
@@ -48,7 +54,9 @@ Camera3D Player::getCamera() const { return camera; }
 void Player::update(float deltaTime, const uint8_t* mapData) {
     if (state.isDead || state.isSpectator) return;
 
+#if !defined(KAIKAI_HEADLESS)
     handleInput(deltaTime);
+#endif
 
     // --- Stamina management ---
     if (state.isRunning && (state.stamina > STAMINA_MIN_TO_RUN)) {
@@ -79,6 +87,7 @@ void Player::update(float deltaTime, const uint8_t* mapData) {
         if (state.sanity > 100.0f) state.sanity = 100.0f;
     }
 
+#if !defined(KAIKAI_HEADLESS)
     // --- Head bob ---
     bool isMoving = (IsKeyDown(KEY_W) || IsKeyDown(KEY_S) ||
                      IsKeyDown(KEY_A) || IsKeyDown(KEY_D));
@@ -105,6 +114,7 @@ void Player::update(float deltaTime, const uint8_t* mapData) {
     }
 
     updateCamera();
+#endif
     (void)mapData; // mapData used via checkCollision from movement calls
 }
 
@@ -113,6 +123,7 @@ void Player::update(float deltaTime, const uint8_t* mapData) {
 // ---------------------------------------------------------------------------
 
 void Player::handleInput(float deltaTime) {
+#if !defined(KAIKAI_HEADLESS)
     if (state.isDead || state.isSpectator) return;
 
     // Rotation from mouse movement (yaw)
@@ -135,6 +146,9 @@ void Player::handleInput(float deltaTime) {
 
     // Flashlight toggle
     if (IsKeyPressed(KEY_F)) toggleFlashlight();
+#else
+    (void)deltaTime;
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -221,6 +235,7 @@ void Player::toggleFlashlight() {
 // Camera
 // ---------------------------------------------------------------------------
 
+#if !defined(KAIKAI_HEADLESS)
 void Player::updateCamera() {
     float eyeHeight = Kaikai::PLAYER_HEIGHT + state.headBob;
 
@@ -242,6 +257,7 @@ void Player::updateCamera() {
     };
     camera.up = {0.0f, 1.0f, 0.0f};
 }
+#endif // !KAIKAI_HEADLESS
 
 // ---------------------------------------------------------------------------
 // Collision detection
@@ -314,8 +330,10 @@ void Player::respawn(Vector3 pos) {
     state.isRunning = false;
     state.headBob = 0.0f;
     state.footstepTimer = 0.0f;
+#if !defined(KAIKAI_HEADLESS)
     headBobPhase = 0.0f;
     headBobAmplitude = 0.0f;
     pitch = 0.0f;
     updateCamera();
+#endif
 }

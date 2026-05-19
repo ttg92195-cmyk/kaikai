@@ -87,8 +87,8 @@ void SpectatorSystem::performAction(uint32_t spectatorId, SpectatorAction::Type 
     }
 }
 
+#if !defined(KAIKAI_HEADLESS)
 void SpectatorSystem::renderSpectatorView(const Camera3D& camera, const PlayerState& spectator) const {
-    // === Ghostly blue tint overlay ===
     // The entire world is rendered with a blue spectral tint for spectators
     Color blueTint = { 30, 60, 120, 40 };
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), blueTint);
@@ -129,9 +129,10 @@ void SpectatorSystem::renderSpectatorView(const Camera3D& camera, const PlayerSt
     DrawLine(cx - 10, cy, cx + 10, cy, crosshairColor);
     DrawLine(cx, cy - 10, cx, cy + 10, crosshairColor);
 }
+#endif // !KAIKAI_HEADLESS
 
+#if !defined(KAIKAI_HEADLESS)
 void SpectatorSystem::renderSpectatorUI() const {
-    int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
 
     // === "You are dead" message ===
@@ -203,6 +204,7 @@ void SpectatorSystem::renderSpectatorUI() const {
     DrawText(camInstructions, (screenWidth - instrWidth) / 2, screenHeight - 30, 14,
              { 150, 180, 220, 160 });
 }
+#endif // !KAIKAI_HEADLESS
 
 const std::vector<SpectatorAction>& SpectatorSystem::getAvailableActions() const {
     return availableActions;

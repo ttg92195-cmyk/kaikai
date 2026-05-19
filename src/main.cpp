@@ -1,3 +1,24 @@
+#if defined(KAIKAI_HEADLESS)
+// Headless server — no raylib, no graphics, no audio
+#include "networking/Server.h"
+#include "ai/GhostAI.h"
+#include "ai/Enemy.h"
+#include "systems/StaminaSystem.h"
+#include "systems/SanitySystem.h"
+#include "systems/JumpscareSystem.h"
+#include "systems/SpectatorSystem.h"
+#include "systems/ItemSpawnSystem.h"
+#include "utils/Constants.h"
+#include "utils/Logger.h"
+#include <iostream>
+#include <string>
+#include <csignal>
+#include <memory>
+#include <cmath>
+#include <cstring>
+#include <chrono>
+#include <thread>
+#else
 #include "raylib.h"
 #include "raymath.h"
 #include "game/Game.h"
@@ -27,13 +48,14 @@
 #include <memory>
 #include <cmath>
 #include <cstring>
+#endif
 
 using namespace Kaikai;
 
 // ============================================================================
 // Android Touch Input System
 // ============================================================================
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) && !defined(KAIKAI_HEADLESS)
 
 // Virtual joystick state
 struct VirtualJoystick {
@@ -292,6 +314,7 @@ void signalHandler(int signum) {
 }
 
 // Helper: compute forward direction vector from a rotation (yaw) value
+#if !defined(KAIKAI_HEADLESS)
 static Vector3 computeForwardVector(float rotation) {
     return {
         sinf(rotation),
@@ -299,10 +322,12 @@ static Vector3 computeForwardVector(float rotation) {
         cosf(rotation)
     };
 }
+#endif
 
 // ============================================================================
 // Draw the main menu / title screen
 // ============================================================================
+#if !defined(KAIKAI_HEADLESS)
 void drawMenuScreen(int screenWidth, int screenHeight, float time, const char* statusText) {
     BeginDrawing();
     ClearBackground({8, 5, 15, 255});
@@ -372,10 +397,12 @@ void drawMenuScreen(int screenWidth, int screenHeight, float time, const char* s
 
     EndDrawing();
 }
+#endif // !KAIKAI_HEADLESS
 
 // ============================================================================
 // Draw connection failed screen
 // ============================================================================
+#if !defined(KAIKAI_HEADLESS)
 void drawConnectionFailedScreen(int screenWidth, int screenHeight, float time,
                                  const char* serverIP) {
     BeginDrawing();
@@ -421,11 +448,12 @@ void drawConnectionFailedScreen(int screenWidth, int screenHeight, float time,
 
     EndDrawing();
 }
+#endif // !KAIKAI_HEADLESS
 
 // ============================================================================
 // Android-specific: Handle touch input for player movement
 // ============================================================================
-#if defined(__ANDROID__)
+#if defined(__ANDROID__) && !defined(KAIKAI_HEADLESS)
 void handleAndroidPlayerInput(Player* player, float deltaTime) {
     if (!player) return;
 
@@ -481,7 +509,24 @@ int main(int argc, char* argv[]) {
     bool isServer = false;
     std::string serverIP = "127.0.0.1";
 
-#if defined(__ANDROID__)
+#if defined(KAIKAI_HEADLESS)
+    // Headless build can only run as server
+    (void)argc;
+    (void)argv;
+    isServer = true;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if ((arg == "--connect" || arg == "-c") && i + 1 < argc) serverIP = argv[++i];
+        else if (arg == "--help" || arg == "-h") {
+            std::cout << "Usage: kaikai_headless_server [options]\n"
+                      << "  (Always runs as server)\n"
+                      << "  --connect, -c IP   Set server bind IP (default: 127.0.0.1)\n"
+                      << "  --help, -h         Show this help\n";
+            return 0;
+        }
+    }
+    signal(SIGINT, signalHandler);
+#elif defined(__ANDROID__)
     // On Android, always run as client
     (void)argc;
     (void)argv;
@@ -510,7 +555,7 @@ int main(int argc, char* argv[]) {
     LOG_INFO(isServer ? "Starting as SERVER" : "Starting as CLIENT");
 
     // ========================================================================
-    // SERVER MODE (Desktop only - Android runs as client only)
+    // SERVER MODE
     // ========================================================================
     if (isServer) {
         Server server;
@@ -526,7 +571,16 @@ int main(int argc, char* argv[]) {
             server.update(deltaTime);
             deltaTime = (float)(GetTime() - frameStart);
             if (deltaTime < 1.0f / TICK_RATE) {
+#if defined(KAIKAI_HEADLESS)
+                // Use sleep instead of busy-wait in headless mode to save CPU
+                float remaining = 1.0f / TICK_RATE - deltaTime;
+                if (remaining > 0.001f) {
+                    std::this_thread::sleep_for(
+                        std::chrono::duration<float>(remaining * 0.9f));
+                }
+#else
                 while ((float)(GetTime() - frameStart) < 1.0f / TICK_RATE) {}
+#endif
                 deltaTime = 1.0f / TICK_RATE;
             }
         }
@@ -534,6 +588,12 @@ int main(int argc, char* argv[]) {
         LOG_INFO("Server shut down.");
         return 0;
     }
+
+#if defined(KAIKAI_HEADLESS)
+    // Headless build should never reach here (isServer is always true)
+    LOG_ERROR("Headless build cannot run as client.");
+    return 1;
+#else
 
     // ========================================================================
     // CLIENT MODE
@@ -998,7 +1058,8 @@ int main(int argc, char* argv[]) {
     audioManager.shutdown();
     renderer.shutdown();
     LOG_INFO("Client shut down.");
-#endif
+#endif  // !__ANDROID__
+#endif  // !KAIKAI_HEADLESS
 
     return 0;
 }

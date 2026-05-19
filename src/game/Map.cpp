@@ -1,5 +1,7 @@
 #include "Map.h"
+#if !defined(KAIKAI_HEADLESS)
 #include "raymath.h"
+#endif
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
@@ -543,7 +545,11 @@ void GameMap::pressSwitch(uint32_t id, uint32_t playerId) {
     Switch* s = getSwitch(id);
     if (!s) return;
     s->isPressed = true;
+#if defined(KAIKAI_HEADLESS)
+    s->pressTimer += 1.0f / 60.0f; // approximate frame time
+#else
     s->pressTimer += GetFrameTime();
+#endif
 
     // If switch doesn't require holding, immediately unlock linked door
     if (!s->requiresTwoPlayers) {
@@ -616,16 +622,18 @@ Vector3 GameMap::getGhostSpawnPoint() const {
 // ---------------------------------------------------------------------------
 
 void GameMap::render() const {
+#if !defined(KAIKAI_HEADLESS)
     renderFloor();
     renderCeiling();
     renderWalls();
     renderDoors();
     renderSwitches();
     renderItems();
+#endif
 }
 
 void GameMap::renderFloor() const {
-    // Draw floor tiles where grid is walkable
+#if !defined(KAIKAI_HEADLESS)
     for (int gz = 0; gz < MAP_HEIGHT; ++gz) {
         for (int gx = 0; gx < MAP_WIDTH; ++gx) {
             if (grid[gz][gx] != 1) { // not a wall
@@ -638,9 +646,11 @@ void GameMap::renderFloor() const {
             }
         }
     }
+#endif
 }
 
 void GameMap::renderCeiling() const {
+#if !defined(KAIKAI_HEADLESS)
     for (int gz = 0; gz < MAP_HEIGHT; ++gz) {
         for (int gx = 0; gx < MAP_WIDTH; ++gx) {
             if (grid[gz][gx] != 1) {
@@ -653,9 +663,11 @@ void GameMap::renderCeiling() const {
             }
         }
     }
+#endif
 }
 
 void GameMap::renderWalls() const {
+#if !defined(KAIKAI_HEADLESS)
     for (int gz = 0; gz < MAP_HEIGHT; ++gz) {
         for (int gx = 0; gx < MAP_WIDTH; ++gx) {
             if (grid[gz][gx] == 1) {
@@ -663,9 +675,11 @@ void GameMap::renderWalls() const {
             }
         }
     }
+#endif
 }
 
 void GameMap::renderWallTile(int gx, int gz) const {
+#if !defined(KAIKAI_HEADLESS)
     Vector3 pos = {
         gx * TILE_SIZE + TILE_SIZE * 0.5f,
         WALL_HEIGHT * 0.5f,
@@ -680,9 +694,11 @@ void GameMap::renderWallTile(int gx, int gz) const {
     wallColor.b = static_cast<unsigned char>(50 + ((gx * 5 + gz * 9) % 12));
 
     DrawCube(pos, TILE_SIZE, WALL_HEIGHT, TILE_SIZE, wallColor);
+#endif
 }
 
 void GameMap::renderDoors() const {
+#if !defined(KAIKAI_HEADLESS)
     for (const auto& door : doors) {
         if (door.isOpen) continue; // Open doors are invisible (grid already floor)
 
@@ -714,9 +730,11 @@ void GameMap::renderDoors() const {
             DrawCube(lockPos, 0.15f, 0.15f, 0.15f, RED);
         }
     }
+#endif
 }
 
 void GameMap::renderSwitches() const {
+#if !defined(KAIKAI_HEADLESS)
     for (const auto& sw : switches) {
         Vector3 pos = sw.position;
         pos.y = 0.6f; // Slightly above floor on wall
@@ -735,9 +753,11 @@ void GameMap::renderSwitches() const {
         Color lightColor = sw.isPressed ? GREEN : RED;
         DrawSphere(lightPos, 0.05f, lightColor);
     }
+#endif
 }
 
 void GameMap::renderItems() const {
+#if !defined(KAIKAI_HEADLESS)
     for (const auto& item : items) {
         if (item.isPickedUp) continue;
 
@@ -791,6 +811,5 @@ void GameMap::renderItems() const {
 
         // Glow effect around items
         Color glowColor = {255, 255, 200, 40};
-        DrawSphere(pos, 0.5f, glowColor);
-    }
+#endif
 }

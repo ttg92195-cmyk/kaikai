@@ -1,5 +1,9 @@
 #pragma once
+#if defined(KAIKAI_HEADLESS)
+#include "../utils/HeadlessCompat.h"
+#else
 #include "raylib.h"
+#endif
 #include <vector>
 #include <random>
 #include <cstdint>
@@ -29,8 +33,10 @@ public:
     // Random spawning
     Vector3 getRandomFloorPosition(const uint8_t* gridData) const;
     
-    // Rendering
+    // Rendering (client-only)
+#if !defined(KAIKAI_HEADLESS)
     void render() const;
+#endif
     
 private:
     std::vector<SpawnedItem> items;
@@ -46,5 +52,7 @@ private:
     
     void collectValidPositions(const uint8_t* gridData);
     void spawnItems();
+#if !defined(KAIKAI_HEADLESS)
     void renderItem(const SpawnedItem& item) const; // render individual item with raylib
+#endif
 };
