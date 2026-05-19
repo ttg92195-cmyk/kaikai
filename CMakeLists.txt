@@ -189,25 +189,35 @@ if(ANDROID)
     message(STATUS "raylib for Android found: ${raylib_VERSION}")
 
     # ---- native_app_glue (required by android.app.NativeActivity) -----------
-    # Try the modern CMake package first, fall back to manual source build
+    # native_app_glue provides ANativeActivity_onCreate and the app thread
+    # that calls android_main (provided by raylib's platform_android code).
+    # We link it separately since raylib's static lib doesn't include it.
+    if(NOT ANDROID_NDK)
+        if(DEFINED ENV{ANDROID_NDK_HOME})
+            set(ANDROID_NDK $ENV{ANDROID_NDK_HOME})
+        elseif(DEFINED ENV{ANDROID_NDK})
+            set(ANDROID_NDK $ENV{ANDROID_NDK})
+        else()
+            message(FATAL_ERROR "ANDROID_NDK not set - cannot find native_app_glue")
+        endif()
+    endif()
+
+    # NDK r23+ moved native_app_glue to a CMake package; older NDKs use source files
     find_package(native_app_glue QUIET CONFIG)
     if(NOT native_app_glue_FOUND)
-        if(NOT ANDROID_NDK)
-            if(DEFINED ENV{ANDROID_NDK_HOME})
-                set(ANDROID_NDK $ENV{ANDROID_NDK_HOME})
-            elseif(DEFINED ENV{ANDROID_NDK})
-                set(ANDROID_NDK $ENV{ANDROID_NDK})
-            else()
-                message(FATAL_ERROR "ANDROID_NDK not set - cannot find native_app_glue")
-            endif()
+        message(STATUS "Building native_app_glue from NDK source: ${ANDROID_NDK}")
+        if(EXISTS "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
+            add_library(native_app_glue STATIC
+                ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
+            )
+            target_include_directories(native_app_glue PUBLIC
+                ${ANDROID_NDK}/sources/android/native_app_glue
+            )
+        else()
+            # NDK r23+: use the CMake-installed version
+            message(FATAL_ERROR
+                "native_app_glue not found! Check NDK version and path: ${ANDROID_NDK}")
         endif()
-        message(STATUS "Building native_app_glue from NDK: ${ANDROID_NDK}")
-        add_library(native_app_glue STATIC
-            ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
-        )
-        target_include_directories(native_app_glue PUBLIC
-            ${ANDROID_NDK}/sources/android/native_app_glue
-        )
         add_library(native_app_glue::native_app_glue ALIAS native_app_glue)
     endif()
 
@@ -246,7 +256,6 @@ if(ANDROID)
     )
     target_compile_definitions(kaikai_android PRIVATE
         KAIKAI_CLIENT
-        PLATFORM_ANDROID
         HAS_SOCKLEN_T=1
     )
     target_link_libraries(kaikai_android PRIVATE
@@ -261,9 +270,18 @@ if(ANDROID)
         m
     )
 
-    # Strip debug symbols for smaller .so
+    # Don't strip all symbols - ANativeActivity_onCreate must remain visible!
+    # Only strip debug info for Release builds.
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set_target_properties(kaikai_android PROPERTIES
+            LINK_FLAGS "-Wl,--strip-debug"
+        )
+    endif()
+
+    # Ensure the shared library exports all needed symbols
     set_target_properties(kaikai_android PROPERTIES
-        LINK_FLAGS "-s"
+        CXX_VISIBILITY_PRESET default
+        VISIBILITY_INLINES_HIDDEN OFF
     )
 
     message(STATUS "=== Android build configured ===")

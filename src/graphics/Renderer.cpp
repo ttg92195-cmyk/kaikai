@@ -53,9 +53,17 @@ void Renderer::init(int width, int height)
     screenWidth = width;
     screenHeight = height;
 
+#if defined(__ANDROID__)
+    // On Android, the window is already initialized by main() with FLAG_FULLSCREEN_MODE.
+    // Just query the actual screen dimensions.
+    screenWidth = GetScreenWidth();
+    screenHeight = GetScreenHeight();
+    SetTargetFPS(60);
+#else
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "Kaikai - Multiplayer Horror");
     SetTargetFPS(60);
+#endif
 
     // Create the render texture for multi-pass rendering
     sceneTexture = LoadRenderTexture(screenWidth, screenHeight);
@@ -74,12 +82,19 @@ void Renderer::init(int width, int height)
 void Renderer::shutdown()
 {
     unloadShaders();
-    UnloadRenderTexture(sceneTexture);
+    if (sceneTexture.id != 0) {
+        UnloadRenderTexture(sceneTexture);
+        sceneTexture = {0};
+    }
 
     delete[] exploredTiles;
     exploredTiles = nullptr;
 
+#if !defined(__ANDROID__)
+    // On Android, the window lifecycle is managed by the NativeActivity.
+    // Closing it here would crash the app if it tries to continue.
     CloseWindow();
+#endif
 }
 
 // ============================================================================

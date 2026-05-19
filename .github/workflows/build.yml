@@ -18,15 +18,9 @@ jobs:
         build_type: [Release]
 
     steps:
-      # -------------------------------------------------------------------
-      # Checkout our repo
-      # -------------------------------------------------------------------
       - name: Checkout Kaikai repository
         uses: actions/checkout@v4
 
-      # -------------------------------------------------------------------
-      # Install system dependencies
-      # -------------------------------------------------------------------
       - name: Install build tools and libraries
         run: |
           sudo apt-get update
@@ -50,18 +44,6 @@ jobs:
             libgl1-mesa-dev \
             libenet-dev
 
-      # -------------------------------------------------------------------
-      # Build and install raylib from source
-      #
-      # THE REAL FIX (after 14 failed builds):
-      #   The raylib repository moved from "raysan/raylib" to "raysan5/raylib"!
-      #   All previous builds were trying to download from the OLD URL which
-      #   returns 404 (the repo no longer exists at the old location).
-      #   It was NEVER an authentication issue - it was a WRONG URL issue!
-      #
-      #   Correct URL: https://github.com/raysan5/raylib/archive/refs/tags/5.5.tar.gz
-      #   Wrong URL:   https://github.com/raysan/raylib/archive/refs/tags/5.5.tar.gz  (404!)
-      # -------------------------------------------------------------------
       - name: Build and install raylib from source
         env:
           GITHUB_TOKEN: ""
@@ -70,25 +52,19 @@ jobs:
           RAYLIB_VERSION="5.5"
           RAYLIB_URL="https://github.com/raysan5/raylib/archive/refs/tags/${RAYLIB_VERSION}.tar.gz"
 
-          echo "=== Downloading raylib ${RAYLIB_VERSION} from raysan5/raylib ==="
-          echo "URL: ${RAYLIB_URL}"
-
+          echo "=== Downloading raylib ${RAYLIB_VERSION} ==="
           curl -L --netrc-file /dev/null -o /tmp/raylib.tar.gz "${RAYLIB_URL}" 2>&1
 
           FILE_SIZE=$(stat -c%s /tmp/raylib.tar.gz 2>/dev/null || echo "0")
           echo "Downloaded: ${FILE_SIZE} bytes"
 
           if [ "$FILE_SIZE" -lt 10000 ]; then
-            echo "ERROR: Download too small! Content:"
-            cat /tmp/raylib.tar.gz
+            echo "ERROR: Download too small!"
             exit 1
           fi
 
-          echo "=== Extracting ==="
-          tar xzf /tmp/raylib.tar.gz -C /tmp
-          ls /tmp/raylib-${RAYLIB_VERSION}/
-
           echo "=== Building raylib ==="
+          tar xzf /tmp/raylib.tar.gz -C /tmp
           cd /tmp/raylib-${RAYLIB_VERSION}
           mkdir build && cd build
           cmake .. \
@@ -100,23 +76,13 @@ jobs:
           make -j$(nproc)
           sudo make install
           sudo ldconfig
-          echo "=== raylib ${RAYLIB_VERSION} installed successfully ==="
+          echo "=== raylib ${RAYLIB_VERSION} installed ==="
 
-      # -------------------------------------------------------------------
-      # Verify raylib is installed
-      # -------------------------------------------------------------------
       - name: Verify raylib installation
         run: |
-          echo "=== raylib via pkg-config ==="
-          pkg-config --modversion raylib 2>/dev/null && echo "Found!" || echo "NOT found via pkg-config"
-          echo "=== raylib library files ==="
+          pkg-config --modversion raylib 2>/dev/null && echo "Found via pkg-config" || echo "Not found via pkg-config"
           ls -la /usr/local/lib/libraylib* 2>/dev/null || true
-          echo "=== raylib cmake config ==="
-          ls -la /usr/local/lib/cmake/raylib/ 2>/dev/null || true
 
-      # -------------------------------------------------------------------
-      # Configure & Build Kaikai
-      # -------------------------------------------------------------------
       - name: Configure CMake
         run: |
           cmake -B build \
@@ -128,9 +94,6 @@ jobs:
           set -o pipefail
           cmake --build build --config ${{ matrix.build_type }} -- -j$(nproc) 2>&1 | tail -150
 
-      # -------------------------------------------------------------------
-      # Upload artifacts
-      # -------------------------------------------------------------------
       - name: Upload server binary
         uses: actions/upload-artifact@v4
         if: always()
@@ -154,24 +117,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # -------------------------------------------------------------------
-      # Checkout our repo
-      # -------------------------------------------------------------------
       - name: Checkout Kaikai repository
         uses: actions/checkout@v4
 
-      # -------------------------------------------------------------------
-      # Setup JDK 17 (required by Android Gradle Plugin 8.x)
-      # -------------------------------------------------------------------
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
 
-      # -------------------------------------------------------------------
-      # Setup Android SDK and install NDK + build tools
-      # -------------------------------------------------------------------
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -185,6 +139,8 @@ jobs:
 
       # -------------------------------------------------------------------
       # Build raylib for Android (arm64-v8a, OpenGL ES 3.0)
+      # IMPORTANT: raylib built with PLATFORM=Android includes the
+      # android_main() wrapper that calls our main() function.
       # -------------------------------------------------------------------
       - name: Build raylib for Android
         run: |
@@ -205,11 +161,13 @@ jobs:
             -DUSE_EXTERNAL_GLFW=OFF
           make -j$(nproc)
           make install
-          echo "=== raylib for Android installed to /tmp/raylib-android ==="
+          echo "=== raylib for Android installed ==="
           ls -la /tmp/raylib-android/lib/
+          echo "=== Checking raylib symbols ==="
+          nm /tmp/raylib-android/lib/libraylib.a 2>/dev/null | grep -i "android_main\|ANativeActivity_onCreate" || echo "Note: android_main/ANativeActivity_onCreate not in raylib static lib (expected - provided by native_app_glue)"
 
       # -------------------------------------------------------------------
-      # Build native shared library (libkaikai_android.so) with CMake
+      # Build native shared library with CMake
       # -------------------------------------------------------------------
       - name: Configure CMake for Android
         run: |
@@ -228,6 +186,30 @@ jobs:
           cmake --build build-android --config Release -j$(nproc) 2>&1 | tail -200
 
       # -------------------------------------------------------------------
+      # Verify the .so is built and check its symbols
+      # -------------------------------------------------------------------
+      - name: Verify native library
+        run: |
+          echo "=== Looking for built .so ==="
+          find build-android -name "*.so" 2>/dev/null || true
+
+          if [ -f build-android/libkaikai_android.so ]; then
+            SO_SIZE=$(stat -c%s build-android/libkaikai_android.so)
+            echo "libkaikai_android.so size: ${SO_SIZE} bytes ($(( SO_SIZE / 1024 )) KB)"
+
+            echo "=== Checking exported symbols ==="
+            ${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm \
+              --dynamic build-android/libkaikai_android.so 2>/dev/null | \
+              grep -i "ANativeActivity_onCreate\|android_main\|main" || echo "Note: using readelf instead"
+            
+            readelf -s build-android/libkaikai_android.so 2>/dev/null | \
+              grep -i "ANativeActivity_onCreate" || echo "Warning: ANativeActivity_onCreate not found in .so!"
+          else
+            echo "ERROR: libkaikai_android.so not found!"
+            exit 1
+          fi
+
+      # -------------------------------------------------------------------
       # Copy native library to Android project's jniLibs directory
       # -------------------------------------------------------------------
       - name: Prepare native library for APK packaging
@@ -238,14 +220,12 @@ jobs:
             echo "=== libkaikai_android.so copied to jniLibs ==="
             ls -la android/app/src/main/jniLibs/arm64-v8a/
           else
-            echo "ERROR: libkaikai_android.so not found in build-android/"
-            ls -la build-android/*.so 2>/dev/null || true
-            find build-android -name "*.so" 2>/dev/null || true
+            echo "ERROR: libkaikai_android.so not found!"
             exit 1
           fi
 
       # -------------------------------------------------------------------
-      # Setup Gradle and build APK
+      # Build APK with Gradle
       # -------------------------------------------------------------------
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -261,8 +241,25 @@ jobs:
         run: ./gradlew assembleDebug --stacktrace
 
       # -------------------------------------------------------------------
-      # Upload APK artifact
+      # Verify and upload APK
       # -------------------------------------------------------------------
+      - name: Verify APK contents
+        run: |
+          APK_FILE=$(find android/app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
+          if [ -n "$APK_FILE" ]; then
+            APK_SIZE=$(stat -c%s "$APK_FILE")
+            echo "APK: $APK_FILE"
+            echo "APK size: ${APK_SIZE} bytes ($(( APK_SIZE / 1024 )) KB)"
+            
+            echo "=== APK contents ==="
+            unzip -l "$APK_FILE" 2>/dev/null | grep -E "\.so$|classes|manifest" || true
+            
+            echo "=== Native libs in APK ==="
+            unzip -l "$APK_FILE" 2>/dev/null | grep "\.so$" || true
+          else
+            echo "Warning: No APK found"
+          fi
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         if: always()
