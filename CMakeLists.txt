@@ -19,8 +19,7 @@ if(NOT raylib_FOUND)
     set(FETCHCONTENT_QUIET OFF)
     FetchContent_Declare(
         raylib
-        URL      https://github.com/raysan/raylib/releases/download/5.0/raylib-5.0.tar.gz
-        URL_HASH MD5=c5c6e4c94a065fdee6b7c3c6c0c4b4c7
+        URL      https://github.com/raysan/raylib/archive/refs/tags/5.0.tar.gz
     )
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(BUILD_GAMES   OFF CACHE BOOL "" FORCE)

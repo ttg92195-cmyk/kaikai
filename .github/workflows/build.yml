@@ -55,13 +55,14 @@ jobs:
         continue-on-error: true
         run: sudo apt-get install -y libraylib-dev
 
-      - name: Build raylib from release tarball
+      - name: Build raylib from source archive
         if: steps.raylib_pkg.outcome == 'failure'
         run: |
           cd /tmp
-          # Download release tarball (not git clone - avoids auth issues)
-          wget -q https://github.com/raysan/raylib/releases/download/5.0/raylib-5.0.tar.gz -O raylib-5.0.tar.gz
-          tar xzf raylib-5.0.tar.gz
+          # Download source archive (not git clone - avoids auth issues on runners)
+          wget -q https://github.com/raysan/raylib/archive/refs/tags/5.0.tar.gz -O raylib-src.tar.gz
+          tar xzf raylib-src.tar.gz
+          # GitHub archives extract as raylib-5.0 (repo-tag format)
           cd raylib-5.0
           mkdir build && cd build
           cmake .. \
