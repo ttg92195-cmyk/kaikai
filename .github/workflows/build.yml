@@ -48,39 +48,47 @@ jobs:
             libgl1-mesa-dev
 
       # -------------------------------------------------------------------
-      # raylib - fix the REAL root cause
-      # actions/checkout sets http.https://github.com/.extraheader with
-      # the scoped GITHUB_TOKEN. This header is sent on ALL github.com
-      # requests, including clones of OTHER repos. GitHub sees the scoped
-      # token, rejects it (401/403), and does NOT fall back to anonymous.
-      # Fix: remove the extraheader, then clone works with anonymous access.
+      # raylib - DO NOT use git clone on GitHub Actions runners!
+      # The runner's GITHUB_TOKEN credential system makes ALL git clone
+      # operations to other repos fail. Use curl to download tarball instead.
+      # curl does NOT use git's credential system, so it works fine.
       # -------------------------------------------------------------------
-      - name: Clone and build raylib
+      - name: Download and build raylib
         run: |
           RAYLIB_VERSION="5.0"
+          cd /tmp
           
-          echo "=== Removing scoped GITHUB_TOKEN from git HTTP headers ==="
-          echo "actions/checkout injects GITHUB_TOKEN via http.extraheader"
-          echo "This scoped token BLOCKS access to other public repos"
-          echo "Removing it allows anonymous git clone for public repos"
+          echo "=== Downloading raylib ${RAYLIB_VERSION} via GitHub API (curl, NOT git) ==="
+          # Use GitHub API tarball endpoint. curl does NOT use git credential helpers.
+          # For public repos, no authentication is needed.
+          # Note: must use -L to follow redirects to codeload.github.com
+          curl -L \
+            "https://api.github.com/repos/raysan/raylib/tarball/${RAYLIB_VERSION}" \
+            -o raylib.tar.gz
           
-          # Remove the Authorization extraheader that actions/checkout set
-          git config --global --unset-all http.https://github.com/.extraheader 2>/dev/null || true
-          git config --global --unset-all http.https://github.com/.extraHeader 2>/dev/null || true
+          # Verify download is a real tarball (not an error page)
+          SIZE=$(wc -c < raylib.tar.gz)
+          echo "Downloaded ${SIZE} bytes"
+          if [ "$SIZE" -lt 50000 ]; then
+            echo "ERROR: Download too small - likely an error page"
+            file raylib.tar.gz
+            head -c 500 raylib.tar.gz
+            exit 1
+          fi
           
-          # Also remove credential helpers just in case
-          git config --global --unset-all credential.helper 2>/dev/null || true
-          
-          # Verify it's gone
-          echo "=== Remaining git config ==="
-          git config --global --list 2>/dev/null || echo "(empty)"
-          
-          echo "=== Cloning raylib ${RAYLIB_VERSION} (anonymous access) ==="
-          GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${RAYLIB_VERSION}" \
-            https://github.com/raysan/raylib.git /tmp/raylib
+          echo "=== Extracting raylib ==="
+          tar xzf raylib.tar.gz
+          # GitHub API tarballs extract as: raysan-raylib-<hash>/
+          EXTRACTED_DIR=$(ls -d raysan-raylib-* 2>/dev/null | head -1)
+          if [ -z "$EXTRACTED_DIR" ]; then
+            echo "ERROR: Could not find extracted directory"
+            ls -la /tmp/
+            exit 1
+          fi
+          echo "Extracted to: ${EXTRACTED_DIR}"
           
           echo "=== Building raylib ==="
-          cd /tmp/raylib
+          cd "/tmp/${EXTRACTED_DIR}"
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
