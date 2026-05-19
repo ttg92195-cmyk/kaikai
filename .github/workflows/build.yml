@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       # -------------------------------------------------------------------
-      # Install system dependencies (NOT libraylib-dev - not in Ubuntu 24.04)
+      # Install system dependencies
       # -------------------------------------------------------------------
       - name: Install build tools and libraries
         run: |
@@ -50,44 +50,81 @@ jobs:
       # -------------------------------------------------------------------
       # Build and install raylib from source
       #
-      # Why this approach works (after 12 failed builds):
-      # - libraylib-dev doesn't exist in Ubuntu 24.04 repos
-      # - git clone fails because actions/checkout sets GITHUB_TOKEN in
-      #   http.extraheader, which git sends to ALL github.com requests,
-      #   and the scoped token only works for our repo, not raysan/raylib
-      # - wget/curl do NOT use GITHUB_TOKEN - they make anonymous requests
-      # - Anonymous requests to public repos on GitHub work fine
-      # - So we download the tarball with wget, then build from source
+      # CRITICAL: Why downloads kept failing (Builds #1-#13):
+      #   - actions/checkout creates ~/.netrc with GITHUB_TOKEN
+      #   - curl/wget AUTO-READ ~/.netrc and send the token to github.com
+      #   - The scoped token only works for OUR repo, NOT raysan/raylib
+      #   - GitHub REJECTS the bad token and does NOT fall back to anonymous
+      #
+      # Fix: Use curl --netrc-file /dev/null to bypass .netrc completely
+      #      AND set GITHUB_TOKEN="" in env to prevent env-based auth
       # -------------------------------------------------------------------
       - name: Build and install raylib from source
+        env:
+          GITHUB_TOKEN: ""
+          GH_TOKEN: ""
+          GIT_ASKPASS: ""
         run: |
-          RAYLIB_VERSION="5.5"
-          RAYLIB_URL="https://github.com/raysan/raylib/archive/refs/tags/${RAYLIB_VERSION}.tar.gz"
+          # Remove .netrc (contains GITHUB_TOKEN that curl/wget auto-sends)
+          rm -f ~/.netrc 2>/dev/null || true
 
-          echo "=== Step 1: Download raylib ${RAYLIB_VERSION} source ==="
-          echo "URL: ${RAYLIB_URL}"
+          # Remove git auth headers (just in case)
+          git config --global --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git config --global --unset-all http.https://github.com/.extraHeader 2>/dev/null || true
 
-          # wget does NOT send GITHUB_TOKEN (unlike git which does)
-          # This means anonymous download of public repo tarballs works!
-          wget -q "${RAYLIB_URL}" -O /tmp/raylib.tar.gz
+          # Try downloading raylib - multiple versions as fallback
+          RAYLIB_VERSIONS=("5.0" "4.5.0" "5.5")
+          DOWNLOADED=false
+          RAYLIB_DIR=""
 
-          # Verify the download is valid (not an error page)
-          FILE_SIZE=$(stat -c%s /tmp/raylib.tar.gz 2>/dev/null || echo "0")
-          echo "Downloaded: ${FILE_SIZE} bytes"
+          for VER in "${RAYLIB_VERSIONS[@]}"; do
+            URL="https://github.com/raysan/raylib/archive/refs/tags/${VER}.tar.gz"
+            echo "--- Trying raylib ${VER}: ${URL} ---"
 
-          if [ "$FILE_SIZE" -lt 10000 ]; then
-            echo "ERROR: Download too small - likely an error page"
-            echo "Content:"
-            cat /tmp/raylib.tar.gz
-            exit 1
+            # --netrc-file /dev/null = bypass ~/.netrc completely
+            # -L = follow redirects (GitHub archive URLs redirect to CDN)
+            # -w = print HTTP status code
+            HTTP_CODE=$(curl -L --netrc-file /dev/null -o /tmp/raylib.tar.gz \
+              -w "%{http_code}" "${URL}" 2>&1) || true
+
+            FILE_SIZE=$(stat -c%s /tmp/raylib.tar.gz 2>/dev/null || echo "0")
+            echo "HTTP Status: ${HTTP_CODE}"
+            echo "File size: ${FILE_SIZE} bytes"
+
+            if [ "$FILE_SIZE" -gt 10000 ]; then
+              echo "SUCCESS: Downloaded raylib ${VER} (${FILE_SIZE} bytes)"
+              DOWNLOADED=true
+              RAYLIB_DIR="raylib-${VER}"
+              break
+            else
+              echo "FAILED: Too small or error page. Content:"
+              head -c 500 /tmp/raylib.tar.gz
+              echo ""
+            fi
+          done
+
+          if [ "$DOWNLOADED" = false ]; then
+            echo "FATAL: Could not download raylib from any version!"
+            echo "Trying codeload.github.com as last resort..."
+            curl -L --netrc-file /dev/null -o /tmp/raylib.tar.gz \
+              -w "%{http_code}" \
+              "https://codeload.github.com/raysan/raylib/tar.gz/5.0" 2>&1 || true
+            FILE_SIZE=$(stat -c%s /tmp/raylib.tar.gz 2>/dev/null || echo "0")
+            echo "File size: ${FILE_SIZE} bytes"
+            if [ "$FILE_SIZE" -gt 10000 ]; then
+              DOWNLOADED=true
+              RAYLIB_DIR="raylib-5.0"
+            else
+              exit 1
+            fi
           fi
 
-          echo "=== Step 2: Extract ==="
+          echo "=== Extracting ${RAYLIB_DIR} ==="
           tar xzf /tmp/raylib.tar.gz -C /tmp
-          ls /tmp/raylib-${RAYLIB_VERSION}/
+          ls /tmp/${RAYLIB_DIR}/
 
-          echo "=== Step 3: Build raylib ==="
-          cd /tmp/raylib-${RAYLIB_VERSION}
+          echo "=== Building raylib ==="
+          cd /tmp/${RAYLIB_DIR}
           mkdir build && cd build
           cmake .. \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
@@ -98,7 +135,7 @@ jobs:
           make -j$(nproc)
           sudo make install
           sudo ldconfig
-          echo "=== raylib ${RAYLIB_VERSION} installed successfully ==="
+          echo "=== raylib installed successfully ==="
 
       # -------------------------------------------------------------------
       # Verify raylib is installed
@@ -111,8 +148,6 @@ jobs:
           ls -la /usr/local/lib/libraylib* 2>/dev/null || true
           echo "=== raylib cmake config ==="
           ls -la /usr/local/lib/cmake/raylib/ 2>/dev/null || true
-          echo "=== enet ==="
-          pkg-config --modversion libenet 2>/dev/null || echo "NOT found"
 
       # -------------------------------------------------------------------
       # Configure & Build Kaikai
