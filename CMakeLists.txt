@@ -211,42 +211,46 @@ if(ANDROID)
         add_library(native_app_glue::native_app_glue ALIAS native_app_glue)
     endif()
 
-    # ---- ENet for Android (always use FetchContent on Android) --------------
-    if(NOT TARGET enet)
-        include(FetchContent)
-        FetchContent_Declare(
-            enet_android
-            GIT_REPOSITORY https://github.com/lsalzman/enet.git
-            GIT_TAG        v1.3.17
-        )
-        FetchContent_GetProperties(enet_android)
-        if(NOT enet_android_POPULATED)
-            FetchContent_Populate(enet_android)
-        endif()
-        add_library(enet STATIC
-            ${enet_android_SOURCE_DIR}/callbacks.c
-            ${enet_android_SOURCE_DIR}/compress.c
-            ${enet_android_SOURCE_DIR}/host.c
-            ${enet_android_SOURCE_DIR}/list.c
-            ${enet_android_SOURCE_DIR}/packet.c
-            ${enet_android_SOURCE_DIR}/peer.c
-            ${enet_android_SOURCE_DIR}/protocol.c
-        )
-        target_include_directories(enet PUBLIC ${enet_android_SOURCE_DIR}/include)
-        target_compile_definitions(enet PUBLIC HAS_SOCKLEN_T=1)
+    # ---- ENet for Android (include sources directly in shared library) ------
+    include(FetchContent)
+    FetchContent_Declare(
+        enet_android
+        GIT_REPOSITORY https://github.com/lsalzman/enet.git
+        GIT_TAG        v1.3.17
+    )
+    FetchContent_GetProperties(enet_android)
+    if(NOT enet_android_POPULATED)
+        FetchContent_Populate(enet_android)
     endif()
+    # Build ENet sources directly into the shared library (avoids static lib linking issues)
+    set(ENET_ANDROID_SOURCES
+        ${enet_android_SOURCE_DIR}/callbacks.c
+        ${enet_android_SOURCE_DIR}/compress.c
+        ${enet_android_SOURCE_DIR}/host.c
+        ${enet_android_SOURCE_DIR}/list.c
+        ${enet_android_SOURCE_DIR}/packet.c
+        ${enet_android_SOURCE_DIR}/peer.c
+        ${enet_android_SOURCE_DIR}/protocol.c
+        ${enet_android_SOURCE_DIR}/unix.c
+    )
 
     # ---- Android shared library target --------------------------------------
     add_library(kaikai_android SHARED
         ${KAIKAI_CLIENT_SOURCES}
         ${KAIKAI_MAIN}
+        ${ENET_ANDROID_SOURCES}
     )
     target_include_directories(kaikai_android PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${enet_android_SOURCE_DIR}/include
+    )
+    target_compile_definitions(kaikai_android PRIVATE
+        KAIKAI_CLIENT
+        PLATFORM_ANDROID
+        HAS_SOCKLEN_T=1
     )
     target_link_libraries(kaikai_android PRIVATE
         raylib::raylib
-        enet
         native_app_glue::native_app_glue
         Threads::Threads
         android
@@ -255,10 +259,6 @@ if(ANDROID)
         GLESv3
         OpenSLES
         m
-    )
-    target_compile_definitions(kaikai_android PRIVATE
-        KAIKAI_CLIENT
-        PLATFORM_ANDROID
     )
 
     # Strip debug symbols for smaller .so
