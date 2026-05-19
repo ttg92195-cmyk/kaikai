@@ -46,6 +46,11 @@ if(NOT raylib_FOUND)
     endif()
 else()
     message(STATUS "raylib found via CMake find_package: ${raylib_VERSION}")
+    # find_package(raylib) creates target 'raylib', not 'raylib::raylib'
+    # Create an alias so we can consistently use raylib::raylib everywhere
+    if(NOT TARGET raylib::raylib)
+        add_library(raylib::raylib ALIAS raylib)
+    endif()
 endif()
 
 # ---- ENet ------------------------------------------------------------------
