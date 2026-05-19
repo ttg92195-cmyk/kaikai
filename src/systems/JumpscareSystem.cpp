@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 
+using namespace Kaikai;
+
 void JumpscareSystem::update(float deltaTime) {
     // Update cooldown timer
     if (cooldownTimer > 0.0f) {

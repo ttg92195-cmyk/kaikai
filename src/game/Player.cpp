@@ -222,7 +222,7 @@ void Player::toggleFlashlight() {
 // ---------------------------------------------------------------------------
 
 void Player::updateCamera() {
-    float eyeHeight = PLAYER_HEIGHT + state.headBob;
+    float eyeHeight = Kaikai::PLAYER_HEIGHT + state.headBob;
 
     camera.position = {
         state.position.x,
@@ -250,10 +250,10 @@ void Player::updateCamera() {
 bool Player::checkCollision(Vector3 newPos, const uint8_t* mapData) {
     // Test four corners of the player's bounding cylinder (approximated as box in XZ)
     float offsets[4][2] = {
-        { PLAYER_RADIUS,  PLAYER_RADIUS},
-        {-PLAYER_RADIUS,  PLAYER_RADIUS},
-        { PLAYER_RADIUS, -PLAYER_RADIUS},
-        {-PLAYER_RADIUS, -PLAYER_RADIUS}
+        { Kaikai::PLAYER_RADIUS,  Kaikai::PLAYER_RADIUS},
+        {-Kaikai::PLAYER_RADIUS,  Kaikai::PLAYER_RADIUS},
+        { Kaikai::PLAYER_RADIUS, -Kaikai::PLAYER_RADIUS},
+        {-Kaikai::PLAYER_RADIUS, -Kaikai::PLAYER_RADIUS}
     };
 
     // Access the global map grid shared with GameMap

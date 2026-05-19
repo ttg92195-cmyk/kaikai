@@ -212,6 +212,13 @@ void Game::assignGhost() {
 GameState Game::getState() const { return gameState; }
 GameMap& Game::getMap() { return gameMap; }
 
+bool Game::isPlayerReady(uint32_t id) const {
+    // All players are considered ready in this implementation
+    // A full implementation would track ready state per player
+    auto it = players.find(id);
+    return it != players.end();
+}
+
 const std::unordered_map<uint32_t, std::unique_ptr<Player>>& Game::getPlayers() const {
     return players;
 }

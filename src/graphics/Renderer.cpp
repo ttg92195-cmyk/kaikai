@@ -2,10 +2,13 @@
 #include "ShaderCode.h"
 #include "../utils/Constants.h"
 #include "raymath.h"
+#include "rlgl.h"
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+
+using namespace Kaikai;
 
 // ============================================================================
 // Static member initialization
@@ -428,6 +431,7 @@ void Renderer::renderDoors() const
 
     Color closedDoorColor = {90, 55, 35, 255};
     Color openDoorColor   = {60, 40, 25, 255};
+    Color wallColor       = {65, 60, 70, 255};  // Also used for door frames
 
     for (int z = 0; z < h; ++z) {
         for (int x = 0; x < w; ++x) {

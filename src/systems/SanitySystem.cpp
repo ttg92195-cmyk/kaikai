@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+using namespace Kaikai;
+
 void SanitySystem::update(float deltaTime, PlayerState& player, bool inDarkArea, float ghostDistance) {
     // Dead or spectator players don't have sanity mechanics
     if (player.isDead || player.isSpectator) {

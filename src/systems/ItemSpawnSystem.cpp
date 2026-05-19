@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+using namespace Kaikai;
+
 ItemSpawnSystem::ItemSpawnSystem()
     : rng(std::random_device{}())
 {

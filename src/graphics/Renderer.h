@@ -91,7 +91,6 @@ private:
 
     void renderPlayers(const Game& game, uint32_t localPlayerId) const;
     void renderPlayerModel(Vector3 pos, float rotation, Color bodyColor, bool isGhost, float time) const;
-    void renderFlashlightBeam(const PlayerState& player);
 
     void updateExplored(const PlayerState& localPlayer);
 };

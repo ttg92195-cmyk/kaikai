@@ -121,7 +121,9 @@ jobs:
             -DCMAKE_PREFIX_PATH=/usr/local
 
       - name: Build
-        run: cmake --build build --config ${{ matrix.build_type }} -- -j$(nproc) 2>&1 | tail -150
+        run: |
+          set -o pipefail
+          cmake --build build --config ${{ matrix.build_type }} -- -j$(nproc) 2>&1 | tail -150
 
       # -------------------------------------------------------------------
       # Upload artifacts

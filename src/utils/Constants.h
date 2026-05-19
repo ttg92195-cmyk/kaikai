@@ -93,6 +93,29 @@ constexpr float DOOR_INTERACT_DISTANCE   = 2.5f;
 constexpr float SWITCH_INTERACT_DISTANCE = 2.5f;
 
 // ---------------------------------------------------------------------------
+// Player
+// ---------------------------------------------------------------------------
+constexpr float PLAYER_HEIGHT = 1.7f;
+constexpr float PLAYER_RADIUS = 0.3f;
+
+// ---------------------------------------------------------------------------
+// Ghost sanity drain range
+// ---------------------------------------------------------------------------
+constexpr float GHOST_SANITY_DRAIN_RANGE = 8.0f;
+
+// ---------------------------------------------------------------------------
+// Tile types (used by map renderer and item spawn system)
+// ---------------------------------------------------------------------------
+constexpr uint8_t TILE_FLOOR       = 0;
+constexpr uint8_t TILE_WALL        = 1;
+constexpr uint8_t TILE_DOOR_CLOSED = 2;
+constexpr uint8_t TILE_SWITCH      = 3;
+constexpr uint8_t TILE_DOOR_OPEN   = 4;
+constexpr uint8_t TILE_ITEM        = 5;
+constexpr uint8_t TILE_EXIT        = 6;
+constexpr uint8_t TILE_SPAWN       = 7;
+
+// ---------------------------------------------------------------------------
 // Fog
 // ---------------------------------------------------------------------------
 constexpr float FOG_NEAR_PLANE = 1.0f;

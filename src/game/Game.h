@@ -38,6 +38,8 @@ public:
     GameState getState() const;
     GameMap&  getMap();
     const std::unordered_map<uint32_t, std::unique_ptr<Player>>& getPlayers() const;
+    uint32_t getLocalPlayerId() const { return localPlayerId; }
+    bool isPlayerReady(uint32_t id) const;
 
     // Network sync
     void syncState();

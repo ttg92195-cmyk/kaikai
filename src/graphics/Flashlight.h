@@ -20,7 +20,7 @@ public:
 
 private:
     bool on = true;
-    float battery = DEFAULT_BATTERY;
+    float battery = Kaikai::DEFAULT_BATTERY;
     float flickerTimer = 0.0f;
     float flickerIntensity = 1.0f;
     Vector3 position = {0, 0, 0};

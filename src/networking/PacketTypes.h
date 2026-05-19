@@ -1,14 +1,16 @@
 #pragma once
 #include "raylib.h"
+#include "../utils/Constants.h"
 #include <cstdint>
 #include <cstring>
 
-// Network constants
-constexpr uint16_t SERVER_PORT        = 7777;
-constexpr uint8_t  MAX_PLAYERS        = 5;
-constexpr uint32_t TICK_RATE          = 60;
-constexpr uint32_t NETWORK_UPDATE_RATE = 20;  // state broadcasts per second
-constexpr float    VOICE_CHAT_MAX_DISTANCE = 30.0f;
+// Network constants (unique to networking, not duplicated from Constants.h)
+using Kaikai::SERVER_PORT;
+using Kaikai::MAX_PLAYERS;
+using Kaikai::TICK_RATE;
+using Kaikai::NETWORK_UPDATE_RATE;
+using Kaikai::VOICE_CHAT_MAX_DISTANCE;
+
 constexpr float    MAX_MOVE_SPEED     = 8.0f;  // units per second (anti-cheat)
 constexpr float    MAX_RUN_SPEED      = 14.0f;
 constexpr float    STATE_BROADCAST_INTERVAL = 1.0f / NETWORK_UPDATE_RATE;

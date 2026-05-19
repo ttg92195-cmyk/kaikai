@@ -4,6 +4,8 @@
 #include <cmath>
 #include <algorithm>
 
+using namespace Kaikai;
+
 AudioManager::AudioManager()
     : heartbeatSound{0}
     , footstepSound{0}

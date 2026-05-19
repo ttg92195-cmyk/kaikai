@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+using namespace Kaikai;
+
 void StaminaSystem::update(float deltaTime, PlayerState& player) {
     // Dead, ghost, or spectator players don't use stamina
     if (player.isDead || player.isSpectator || player.isGhost) {

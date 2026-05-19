@@ -22,6 +22,8 @@
 #include <memory>
 #include <cmath>
 
+using namespace Kaikai;
+
 // Global for signal handling
 static bool g_running = true;
 
@@ -183,7 +185,7 @@ int main(int argc, char* argv[]) {
                 const PlayerState& ps = localPlayer->getState();
                 Camera3D camera = { 0 };
                 camera.position = ps.position;
-                camera.position.y += PLAYER_HEIGHT * 0.9f; // Eye level
+                camera.position.y += Kaikai::PLAYER_HEIGHT * 0.9f; // Eye level
                 Vector3 fwd = computeForwardVector(ps.rotation);
                 camera.target = Vector3Add(camera.position, fwd);
                 camera.up = { 0.0f, 1.0f, 0.0f };
