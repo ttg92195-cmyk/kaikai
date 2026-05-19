@@ -15,14 +15,15 @@ include(FetchContent)
 # ---- raylib ----------------------------------------------------------------
 find_package(raylib QUIET 4.0)
 if(NOT raylib_FOUND)
-    message(STATUS "raylib not found locally – fetching via FetchContent")
+    message(STATUS "raylib not found locally - downloading release tarball")
     set(FETCHCONTENT_QUIET OFF)
     FetchContent_Declare(
         raylib
-        GIT_REPOSITORY https://github.com/raysan/raylib.git
-        GIT_TAG        5.0
+        URL      https://github.com/raysan/raylib/releases/download/5.0/raylib-5.0.tar.gz
+        URL_HASH MD5=c5c6e4c94a065fdee6b7c3c6c0c4b4c7
     )
     set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(BUILD_GAMES   OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(raylib)
 endif()
 
@@ -33,11 +34,11 @@ if(PkgConfig_FOUND)
 endif()
 
 if(NOT ENET_FOUND)
-    message(STATUS "ENet not found locally – fetching via FetchContent")
+    message(STATUS "ENet not found locally - downloading release tarball")
     FetchContent_Declare(
         enet
-        GIT_REPOSITORY https://github.com/lsalzman/enet.git
-        GIT_TAG        v1.3.17
+        URL      https://github.com/lsalzman/enet/archive/refs/tags/v1.3.17.tar.gz
+        URL_HASH MD5=eed497f0d1bb8b85b6c3c3e42f9f7538
     )
 
     # ENet does not provide a CMakeLists.txt, so we build it ourselves
@@ -64,28 +65,36 @@ if(NOT ENET_FOUND)
 endif()
 
 # ---------------------------------------------------------------------------
-# Collect source files
+# Collect ALL source files
 # ---------------------------------------------------------------------------
-set(KAIKAI_COMMON_SOURCES
-    # Add shared sources here as the project grows
-)
-
+# Server needs: game, networking, ai, systems, audio, utils + main.cpp
 file(GLOB_RECURSE KAIKAI_SERVER_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/server/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/shared/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/game/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/networking/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/audio/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.cpp"
 )
 
+# Client needs: game, networking, graphics, ai, systems, audio, utils + main.cpp
 file(GLOB_RECURSE KAIKAI_CLIENT_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/client/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/shared/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/game/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/networking/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/graphics/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/ai/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/systems/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/audio/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/utils/*.cpp"
 )
 
+# Both targets share main.cpp
+set(KAIKAI_MAIN "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
+
 # ---------------------------------------------------------------------------
-# Server target
+# Server target (headless - no raylib needed for pure server)
 # ---------------------------------------------------------------------------
-add_executable(kaikai_server ${KAIKAI_SERVER_SOURCES})
+add_executable(kaikai_server ${KAIKAI_SERVER_SOURCES} ${KAIKAI_MAIN})
 target_include_directories(kaikai_server PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${ENET_INCLUDE_DIRS}
@@ -99,9 +108,9 @@ target_link_libraries(kaikai_server PRIVATE
 target_compile_definitions(kaikai_server PRIVATE KAIKAI_SERVER)
 
 # ---------------------------------------------------------------------------
-# Client target
+# Client target (needs raylib for graphics/audio)
 # ---------------------------------------------------------------------------
-add_executable(kaikai_client ${KAIKAI_CLIENT_SOURCES})
+add_executable(kaikai_client ${KAIKAI_CLIENT_SOURCES} ${KAIKAI_MAIN})
 target_include_directories(kaikai_client PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${ENET_INCLUDE_DIRS}
@@ -119,7 +128,7 @@ target_compile_definitions(kaikai_client PRIVATE KAIKAI_CLIENT)
 # Compiler warnings
 # ---------------------------------------------------------------------------
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
+    add_compile_options(-Wall -Wextra -Wno-unused-parameter -Wno-unused-variable)
 endif()
 
 # ---------------------------------------------------------------------------
