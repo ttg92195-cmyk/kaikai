@@ -219,6 +219,8 @@ jobs:
             -DANDROID_PLATFORM=android-21 \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH=/tmp/raylib-android \
+            -DCMAKE_FIND_ROOT_PATH=/tmp/raylib-android \
+            -Draylib_DIR=/tmp/raylib-android/lib/cmake/raylib \
             -DANDROID_STL=c++_static
 
       - name: Build native library
