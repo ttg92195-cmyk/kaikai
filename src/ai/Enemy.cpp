@@ -163,7 +163,7 @@ void Enemy::chase(float deltaTime, const std::vector<PlayerState>& players, cons
         float dist = Vector3Distance(position, player.position);
         if (dist < nearestDist) {
             nearestDist = dist;
-            nearest = player;
+            nearest = &player;
         }
     }
 
