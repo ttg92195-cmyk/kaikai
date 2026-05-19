@@ -7,7 +7,10 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  # =========================================================================
+  # JOB 1: Build Linux desktop binaries (server + client)
+  # =========================================================================
+  build-linux:
     runs-on: ubuntu-latest
 
     strategy:
@@ -142,4 +145,123 @@ jobs:
         with:
           name: kaikai_client-${{ matrix.build_type }}
           path: build/kaikai_client
+          if-no-files-found: warn
+
+  # =========================================================================
+  # JOB 2: Build Android APK (arm64-v8a)
+  # =========================================================================
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      # -------------------------------------------------------------------
+      # Checkout our repo
+      # -------------------------------------------------------------------
+      - name: Checkout Kaikai repository
+        uses: actions/checkout@v4
+
+      # -------------------------------------------------------------------
+      # Setup JDK 17 (required by Android Gradle Plugin 8.x)
+      # -------------------------------------------------------------------
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      # -------------------------------------------------------------------
+      # Setup Android SDK and install NDK + build tools
+      # -------------------------------------------------------------------
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK and build tools
+        run: |
+          sdkmanager --install "ndk;26.1.10909125" "build-tools;34.0.0" "platforms;android-34"
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/26.1.10909125" >> $GITHUB_ENV
+
+      # -------------------------------------------------------------------
+      # Build raylib for Android (arm64-v8a, OpenGL ES 3.0)
+      # -------------------------------------------------------------------
+      - name: Build raylib for Android
+        run: |
+          RAYLIB_VERSION="5.5"
+          git clone https://github.com/raysan5/raylib.git --branch ${RAYLIB_VERSION} --depth 1 /tmp/raylib
+
+          echo "=== Building raylib ${RAYLIB_VERSION} for Android arm64-v8a ==="
+          mkdir -p /tmp/raylib/build-android && cd /tmp/raylib/build-android
+          cmake .. \
+            -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-21 \
+            -DPLATFORM=Android \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/tmp/raylib-android \
+            -DBUILD_EXAMPLES=OFF \
+            -DBUILD_GAMES=OFF \
+            -DUSE_EXTERNAL_GLFW=OFF
+          make -j$(nproc)
+          make install
+          echo "=== raylib for Android installed to /tmp/raylib-android ==="
+          ls -la /tmp/raylib-android/lib/
+
+      # -------------------------------------------------------------------
+      # Build native shared library (libkaikai_android.so) with CMake
+      # -------------------------------------------------------------------
+      - name: Configure CMake for Android
+        run: |
+          cmake -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE=${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH=/tmp/raylib-android \
+            -DANDROID_STL=c++_static
+
+      - name: Build native library
+        run: |
+          cmake --build build-android --config Release -j$(nproc) 2>&1 | tail -200
+
+      # -------------------------------------------------------------------
+      # Copy native library to Android project's jniLibs directory
+      # -------------------------------------------------------------------
+      - name: Prepare native library for APK packaging
+        run: |
+          mkdir -p android/app/src/main/jniLibs/arm64-v8a
+          if [ -f build-android/libkaikai_android.so ]; then
+            cp build-android/libkaikai_android.so android/app/src/main/jniLibs/arm64-v8a/
+            echo "=== libkaikai_android.so copied to jniLibs ==="
+            ls -la android/app/src/main/jniLibs/arm64-v8a/
+          else
+            echo "ERROR: libkaikai_android.so not found in build-android/"
+            ls -la build-android/*.so 2>/dev/null || true
+            find build-android -name "*.so" 2>/dev/null || true
+            exit 1
+          fi
+
+      # -------------------------------------------------------------------
+      # Setup Gradle and build APK
+      # -------------------------------------------------------------------
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Generate Gradle wrapper
+        working-directory: android
+        run: gradle wrapper
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --stacktrace
+
+      # -------------------------------------------------------------------
+      # Upload APK artifact
+      # -------------------------------------------------------------------
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kaikai-android-arm64-debug
+          path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn

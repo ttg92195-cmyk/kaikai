@@ -17,6 +17,10 @@
 #include "utils/Constants.h"
 #include "utils/Logger.h"
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 #include <iostream>
 #include <string>
 #include <csignal>
@@ -47,6 +51,13 @@ int main(int argc, char* argv[]) {
     bool isServer = false;
     std::string serverIP = "127.0.0.1";
 
+#if defined(__ANDROID__)
+    // On Android, always run as client - no command-line arguments available
+    // The game connects to a server on the local network by default
+    (void)argc;
+    (void)argv;
+    isServer = false;
+#else
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "--server" || arg == "-s") isServer = true;
@@ -61,6 +72,7 @@ int main(int argc, char* argv[]) {
     }
 
     signal(SIGINT, signalHandler);
+#endif
     LOG_INFO("Kaikai - 3D Multiplayer Horror Game");
     LOG_INFO(isServer ? "Starting as SERVER" : "Starting as CLIENT");
 

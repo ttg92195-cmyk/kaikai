@@ -170,3 +170,94 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/assets")
         COMMENT "Copying assets to output directory"
     )
 endif()
+
+# ===========================================================================
+# ANDROID BUILD TARGET
+# ===========================================================================
+# When building with the Android NDK toolchain (ANDROID=TRUE), we build a
+# shared library (libkaikai_android.so) instead of desktop executables.
+# This .so is loaded by android.app.NativeActivity at runtime.
+# ===========================================================================
+if(ANDROID)
+    message(STATUS "=== Configuring Android build ===")
+
+    # ---- native_app_glue (required by android.app.NativeActivity) -----------
+    # Try the modern CMake package first, fall back to manual source build
+    find_package(native_app_glue QUIET CONFIG)
+    if(NOT native_app_glue_FOUND)
+        if(NOT ANDROID_NDK)
+            if(DEFINED ENV{ANDROID_NDK_HOME})
+                set(ANDROID_NDK $ENV{ANDROID_NDK_HOME})
+            elseif(DEFINED ENV{ANDROID_NDK})
+                set(ANDROID_NDK $ENV{ANDROID_NDK})
+            else()
+                message(FATAL_ERROR "ANDROID_NDK not set – cannot find native_app_glue")
+            endif()
+        endif()
+        message(STATUS "Building native_app_glue from NDK: ${ANDROID_NDK}")
+        add_library(native_app_glue STATIC
+            ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
+        )
+        target_include_directories(native_app_glue PUBLIC
+            ${ANDROID_NDK}/sources/android/native_app_glue
+        )
+        add_library(native_app_glue::native_app_glue ALIAS native_app_glue)
+    endif()
+
+    # ---- ENet for Android (always use FetchContent on Android) --------------
+    if(NOT TARGET enet)
+        include(FetchContent)
+        FetchContent_Declare(
+            enet_android
+            GIT_REPOSITORY https://github.com/lsalzman/enet.git
+            GIT_TAG        v1.3.17
+        )
+        FetchContent_GetProperties(enet_android)
+        if(NOT enet_android_POPULATED)
+            FetchContent_Populate(enet_android)
+        endif()
+        add_library(enet STATIC
+            ${enet_android_SOURCE_DIR}/callbacks.c
+            ${enet_android_SOURCE_DIR}/compress.c
+            ${enet_android_SOURCE_DIR}/host.c
+            ${enet_android_SOURCE_DIR}/list.c
+            ${enet_android_SOURCE_DIR}/packet.c
+            ${enet_android_SOURCE_DIR}/peer.c
+            ${enet_android_SOURCE_DIR}/protocol.c
+        )
+        target_include_directories(enet PUBLIC ${enet_android_SOURCE_DIR}/include)
+        target_compile_definitions(enet PUBLIC HAS_SOCKLEN_T=1)
+    endif()
+
+    # ---- Android shared library target --------------------------------------
+    add_library(kaikai_android SHARED
+        ${KAIKAI_CLIENT_SOURCES}
+        ${KAIKAI_MAIN}
+    )
+    target_include_directories(kaikai_android PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(kaikai_android PRIVATE
+        raylib::raylib
+        enet
+        native_app_glue::native_app_glue
+        Threads::Threads
+        android
+        log
+        EGL
+        GLESv3
+        OpenSLES
+        m
+    )
+    target_compile_definitions(kaikai_android PRIVATE
+        KAIKAI_CLIENT
+        PLATFORM_ANDROID
+    )
+
+    # Strip debug symbols for smaller .so
+    set_target_properties(kaikai_android PROPERTIES
+        LINK_FLAGS "-s"
+    )
+
+    message(STATUS "=== Android build configured ===")
+endif()
