@@ -166,8 +166,8 @@ int main(int argc, char* argv[]) {
                 std::vector<PlayerState> alivePlayers;
                 const auto& allPlayers = game.getPlayers();
                 for (const auto& [pid, player] : allPlayers) {
-                    if (!player.getState().isDead && !player.getState().isSpectator) {
-                        alivePlayers.push_back(player.getState());
+                    if (!player->getState().isDead && !player->getState().isSpectator) {
+                        alivePlayers.push_back(player->getState());
                     }
                 }
                 spectatorSystem.update(deltaTime, alivePlayers);

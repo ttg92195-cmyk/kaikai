@@ -560,7 +560,7 @@ void Renderer::renderPlayers(const Game& game, uint32_t localPlayerId) const
     for (const auto& [id, player] : players) {
         if (id == localPlayerId) continue; // Don't render local player model
 
-        const PlayerState& state = player.getState();
+        const PlayerState& state = player->getState();
         if (state.isSpectator) continue;   // Spectators are invisible
 
         Color bodyColor = playerColors[id % MAX_PLAYER_COLORS];
@@ -810,7 +810,7 @@ void Renderer::renderMinimap(const Game& game, const PlayerState& localPlayer)
     // Draw other players on the minimap
     const auto& players = game.getPlayers();
     for (const auto& [id, player] : players) {
-        const PlayerState& state = player.getState();
+        const PlayerState& state = player->getState();
         if (state.isSpectator) continue;
 
         int px = (int)(state.position.x / TILE_SIZE);
