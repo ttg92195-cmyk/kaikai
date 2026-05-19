@@ -234,7 +234,7 @@ if(ANDROID)
         FetchContent_Populate(enet_android)
     endif()
     # Build ENet sources directly into the shared library (avoids static lib linking issues)
-    # ENet v1.3.17 only has these 7 source files (no unix.c / win32.c)
+    # ENet v1.3.17 source files (core + unix platform layer for Android/Linux)
     set(ENET_ANDROID_SOURCES
         ${enet_android_SOURCE_DIR}/callbacks.c
         ${enet_android_SOURCE_DIR}/compress.c
@@ -243,6 +243,7 @@ if(ANDROID)
         ${enet_android_SOURCE_DIR}/packet.c
         ${enet_android_SOURCE_DIR}/peer.c
         ${enet_android_SOURCE_DIR}/protocol.c
+        ${enet_android_SOURCE_DIR}/unix.c
     )
 
     # ---- Android shared library target --------------------------------------
