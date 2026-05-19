@@ -1,13 +1,22 @@
 #include "ShaderCode.h"
 
+// Choose GLSL version based on target platform.
+// Android uses OpenGL ES 3.0 (#version 300 es) while desktop uses OpenGL 3.3 (#version 330).
+#if defined(__ANDROID__)
+  #define GLSL_VERSION    "#version 300 es\n"
+  #define GLSL_PRECISION  "precision mediump float;\nprecision mediump int;\n"
+#else
+  #define GLSL_VERSION    "#version 330\n"
+  #define GLSL_PRECISION  ""
+#endif
+
 namespace ShaderCode {
 
 // ============================================================================
 // FLASHLIGHT VERTEX SHADER
 // ============================================================================
 const char* getFlashlightVertexShader() {
-    return R"GLSL(
-#version 330
+    return GLSL_VERSION GLSL_PRECISION R"GLSL(
 
 // Vertex attributes provided by raylib
 in vec3 vertexPosition;
@@ -41,8 +50,7 @@ void main() {
 // FLASHLIGHT FRAGMENT SHADER
 // ============================================================================
 const char* getFlashlightFragmentShader() {
-    return R"GLSL(
-#version 330
+    return GLSL_VERSION GLSL_PRECISION R"GLSL(
 
 in vec3 fragPosition;
 in vec2 fragTexCoord;
@@ -101,8 +109,7 @@ void main() {
 // FOG VERTEX SHADER (post-processing)
 // ============================================================================
 const char* getFogVertexShader() {
-    return R"GLSL(
-#version 330
+    return GLSL_VERSION GLSL_PRECISION R"GLSL(
 
 in vec3 vertexPosition;
 in vec2 vertexTexCoord;
@@ -122,8 +129,7 @@ void main() {
 // FOG FRAGMENT SHADER (post-processing)
 // ============================================================================
 const char* getFogFragmentShader() {
-    return R"GLSL(
-#version 330
+    return GLSL_VERSION GLSL_PRECISION R"GLSL(
 
 in vec2 fragTexCoord;
 out vec4 finalColor;
@@ -181,8 +187,7 @@ void main() {
 // SANITY VERTEX SHADER (post-processing)
 // ============================================================================
 const char* getSanityVertexShader() {
-    return R"GLSL(
-#version 330
+    return GLSL_VERSION GLSL_PRECISION R"GLSL(
 
 in vec3 vertexPosition;
 in vec2 vertexTexCoord;
@@ -202,8 +207,7 @@ void main() {
 // SANITY FRAGMENT SHADER (post-processing)
 // ============================================================================
 const char* getSanityFragmentShader() {
-    return R"GLSL(
-#version 330
+    return GLSL_VERSION GLSL_PRECISION R"GLSL(
 
 in vec2 fragTexCoord;
 out vec4 finalColor;

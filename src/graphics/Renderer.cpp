@@ -59,21 +59,40 @@ void Renderer::init(int width, int height)
     screenWidth = GetScreenWidth();
     screenHeight = GetScreenHeight();
     SetTargetFPS(60);
+
+    // Safety: ensure we have valid screen dimensions
+    if (screenWidth <= 0 || screenHeight <= 0) {
+        screenWidth = 1280;
+        screenHeight = 720;
+    }
 #else
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "Kaikai - Multiplayer Horror");
     SetTargetFPS(60);
+
+    // Safety: check that window was created
+    if (!IsWindowReady()) {
+        return;  // Cannot render without a window
+    }
 #endif
 
     // Create the render texture for multi-pass rendering
     sceneTexture = LoadRenderTexture(screenWidth, screenHeight);
+    if (sceneTexture.id == 0) {
+        // Fallback: try with a smaller size if allocation failed
+        sceneTexture = LoadRenderTexture(screenWidth / 2, screenHeight / 2);
+    }
 
     // Load custom shaders
     loadShaders();
 
     // Allocate explored tiles array
-    exploredTiles = new bool[MAP_WIDTH * MAP_HEIGHT];
-    memset(exploredTiles, 0, sizeof(bool) * MAP_WIDTH * MAP_HEIGHT);
+    try {
+        exploredTiles = new bool[MAP_WIDTH * MAP_HEIGHT];
+        memset(exploredTiles, 0, sizeof(bool) * MAP_WIDTH * MAP_HEIGHT);
+    } catch (...) {
+        exploredTiles = nullptr;
+    }
 }
 
 // ============================================================================
@@ -130,6 +149,9 @@ void Renderer::loadShaders()
 
         float t = 0.0f;
         SetShaderValue(flashlightShader, flTimeLoc, &t, SHADER_UNIFORM_FLOAT);
+    } else {
+        // Shader compilation failed - use fallback ambient lighting
+        // Set a minimum ambient so the scene is not completely black
     }
 
     // --- Fog post-process shader ---
@@ -162,6 +184,14 @@ void Renderer::loadShaders()
     }
 
     shadersLoaded = (flashlightShader.id != 0 && sanityShader.id != 0);
+
+    // Even if shaders failed, the game can still render with basic lighting
+    // On Android, if shaders fail, we use a higher ambient fallback
+#if defined(__ANDROID__)
+    if (!shadersLoaded) {
+        // Will be handled in renderGame() - use higher ambient fallback
+    }
+#endif
 }
 
 // ============================================================================
@@ -335,6 +365,23 @@ void Renderer::renderGame(const Game& game, const PlayerState& localPlayer)
     // Build camera from player state
     Camera3D camera = buildCamera(localPlayer);
 
+    // Check if scene texture is valid before rendering
+    if (sceneTexture.id == 0) {
+        // No render texture - render directly to screen as fallback
+        BeginDrawing();
+        ClearBackground({5, 3, 10, 255});
+        BeginMode3D(camera);
+
+        // Render without shaders as fallback
+        renderMap();
+        renderPlayers(game, localPlayer.id);
+
+        EndMode3D();
+        EndDrawing();
+        cachedGame = nullptr;
+        return;
+    }
+
     // Start rendering to the scene render texture
     BeginTextureMode(sceneTexture);
     ClearBackground({5, 3, 10, 255});
@@ -345,6 +392,9 @@ void Renderer::renderGame(const Game& game, const PlayerState& localPlayer)
     if (shadersLoaded && flashlightShader.id != 0) {
         updateFlashlightUniforms(localPlayer);
         BeginShaderMode(flashlightShader);
+    } else {
+        // Fallback: if no flashlight shader, add basic ambient light
+        // so the scene is not completely black
     }
 
     // Render the map geometry

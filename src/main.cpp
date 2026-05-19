@@ -543,8 +543,21 @@ int main(int argc, char* argv[]) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_FULLSCREEN_MODE);
     InitWindow(0, 0, "Kaikai - Multiplayer Horror");
 
+    // Safety: check that window was created successfully
+    if (!IsWindowReady()) {
+        LOG_ERROR("Failed to initialize window on Android!");
+        return 1;
+    }
+
     int screenWidth = GetScreenWidth();
     int screenHeight = GetScreenHeight();
+
+    // Safety: ensure valid screen dimensions
+    if (screenWidth <= 0 || screenHeight <= 0) {
+        screenWidth = 1280;
+        screenHeight = 720;
+    }
+
     LOG_INFO("Android screen: %dx%d", screenWidth, screenHeight);
 
     // Initialize Android touch controls layout
@@ -574,6 +587,10 @@ int main(int argc, char* argv[]) {
 
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
+
+        // Clamp deltaTime to prevent huge jumps (e.g., after loading)
+        if (deltaTime > 0.1f) deltaTime = 0.1f;
+
         bool touching = (GetTouchPointCount() > 0);
         bool tapDetected = (prevTouching && !touching); // Released = tap
         prevTouching = touching;
@@ -584,7 +601,9 @@ int main(int argc, char* argv[]) {
         if (newW != screenWidth || newH != screenHeight) {
             screenWidth = newW;
             screenHeight = newH;
-            initAndroidLayout(screenWidth, screenHeight);
+            if (screenWidth > 0 && screenHeight > 0) {
+                initAndroidLayout(screenWidth, screenHeight);
+            }
         }
 
         switch (appState) {
@@ -610,47 +629,107 @@ int main(int argc, char* argv[]) {
                 drawMenuScreen(screenWidth, screenHeight, menuTime,
                               "Connecting to server...");
 
-                // Attempt connection immediately on first frame of this state
-                renderer = new Renderer();
-                renderer->init(screenWidth, screenHeight);
+                // Attempt connection - with safety wrapping for each component
+                bool initSuccess = true;
 
-                audioManager = new AudioManager();
-                audioManager->init();
+                // 1. Create and init Renderer
+                try {
+                    renderer = new Renderer();
+                    renderer->init(screenWidth, screenHeight);
+                } catch (...) {
+                    LOG_ERROR("Failed to initialize renderer!");
+                    delete renderer; renderer = nullptr;
+                    initSuccess = false;
+                }
 
-                client = new Client();
+                // 2. Create and init AudioManager
+                if (initSuccess) {
+                    try {
+                        audioManager = new AudioManager();
+                        audioManager->init();
+                        // Audio init failure is not fatal - game can run without audio
+                    } catch (...) {
+                        LOG_ERROR("Failed to initialize audio!");
+                        delete audioManager; audioManager = nullptr;
+                        // Not fatal - continue without audio
+                    }
+                }
 
-                if (!client->connect(serverIP.c_str(), SERVER_PORT)) {
-                    LOG_ERROR("Failed to connect to server at %s:%d", serverIP.c_str(), SERVER_PORT);
+                // 3. Create Client and connect
+                if (initSuccess) {
+                    try {
+                        client = new Client();
+                    } catch (...) {
+                        LOG_ERROR("Failed to create network client!");
+                        delete client; client = nullptr;
+                        initSuccess = false;
+                    }
+                }
+
+                if (initSuccess && client) {
+                    if (!client->connect(serverIP.c_str(), SERVER_PORT)) {
+                        LOG_ERROR("Failed to connect to server at %s:%d", serverIP.c_str(), SERVER_PORT);
+                        appState = AppState::CONNECTION_FAILED;
+                        menuTime = 0.0f;
+
+                        // Cleanup on connection failure
+                        delete client; client = nullptr;
+                        if (audioManager) { audioManager->shutdown(); delete audioManager; audioManager = nullptr; }
+                        if (renderer) { renderer->shutdown(); delete renderer; renderer = nullptr; }
+                    } else {
+                        LOG_INFO("Connected to server at %s:%d", serverIP.c_str(), SERVER_PORT);
+                        appState = AppState::PLAYING;
+
+                        // Create game systems - with safety
+                        try {
+                            flashlight = new Flashlight();
+                            fogSystem = new FogSystem();
+                            staminaSystem = new StaminaSystem();
+                            sanitySystem = new SanitySystem();
+                            jumpscareSystem = new JumpscareSystem();
+                            spectatorSystem = new SpectatorSystem();
+                            itemSpawnSystem = new ItemSpawnSystem();
+                            game = new Game(false);
+                        } catch (...) {
+                            LOG_ERROR("Failed to initialize game systems!");
+                            // Clean up whatever was created
+                            delete game; game = nullptr;
+                            delete itemSpawnSystem; itemSpawnSystem = nullptr;
+                            delete spectatorSystem; spectatorSystem = nullptr;
+                            delete jumpscareSystem; jumpscareSystem = nullptr;
+                            delete sanitySystem; sanitySystem = nullptr;
+                            delete staminaSystem; staminaSystem = nullptr;
+                            delete fogSystem; fogSystem = nullptr;
+                            delete flashlight; flashlight = nullptr;
+
+                            if (client) { client->disconnect(); delete client; client = nullptr; }
+                            if (audioManager) { audioManager->shutdown(); delete audioManager; audioManager = nullptr; }
+                            if (renderer) { renderer->shutdown(); delete renderer; renderer = nullptr; }
+
+                            appState = AppState::CONNECTION_FAILED;
+                            menuTime = 0.0f;
+                        }
+                    }
+                } else if (!initSuccess) {
+                    // Initialization failed - go back to connection failed screen
                     appState = AppState::CONNECTION_FAILED;
                     menuTime = 0.0f;
 
-                    delete client; client = nullptr;
-                    audioManager->shutdown();
-                    delete audioManager; audioManager = nullptr;
-                    renderer->shutdown();
-                    delete renderer; renderer = nullptr;
-                } else {
-                    LOG_INFO("Connected to server at %s:%d", serverIP.c_str(), SERVER_PORT);
-                    appState = AppState::PLAYING;
-
-                    flashlight = new Flashlight();
-                    fogSystem = new FogSystem();
-                    staminaSystem = new StaminaSystem();
-                    sanitySystem = new SanitySystem();
-                    jumpscareSystem = new JumpscareSystem();
-                    spectatorSystem = new SpectatorSystem();
-                    itemSpawnSystem = new ItemSpawnSystem();
-                    game = new Game(false);
+                    if (client) { delete client; client = nullptr; }
+                    if (audioManager) { audioManager->shutdown(); delete audioManager; audioManager = nullptr; }
+                    if (renderer) { renderer->shutdown(); delete renderer; renderer = nullptr; }
                 }
                 break;
             }
 
             // ---- PLAYING ----
             case AppState::PLAYING: {
-                if (!client || !client->isConnected()) {
+                if (!client || !client->isConnected() || !renderer || !game) {
                     appState = AppState::CONNECTION_FAILED;
                     menuTime = 0.0f;
 
+                    // Safe cleanup with null checks
+                    if (client) { client->disconnect(); delete client; client = nullptr; }
                     delete game; game = nullptr;
                     delete itemSpawnSystem; itemSpawnSystem = nullptr;
                     delete spectatorSystem; spectatorSystem = nullptr;
@@ -659,92 +738,116 @@ int main(int argc, char* argv[]) {
                     delete staminaSystem; staminaSystem = nullptr;
                     delete fogSystem; fogSystem = nullptr;
                     delete flashlight; flashlight = nullptr;
-                    client->disconnect();
-                    delete client; client = nullptr;
                     if (audioManager) { audioManager->shutdown(); delete audioManager; audioManager = nullptr; }
                     if (renderer) { renderer->shutdown(); delete renderer; renderer = nullptr; }
                     break;
                 }
 
-                // Update network
-                client->update(deltaTime);
+                try {
+                    // Update network
+                    client->update(deltaTime);
 
-                // Get local player
-                uint32_t localId = client->getLocalPlayerId();
-                Player* localPlayer = game->getPlayer(localId);
+                    // Get local player
+                    uint32_t localId = client->getLocalPlayerId();
+                    Player* localPlayer = game->getPlayer(localId);
 
-                if (localPlayer) {
-                    PlayerState& state = localPlayer->getStateMut();
+                    if (localPlayer) {
+                        PlayerState& state = localPlayer->getStateMut();
 
-                    // Handle Android touch input
-                    handleAndroidPlayerInput(localPlayer, deltaTime);
+                        // Handle Android touch input
+                        handleAndroidPlayerInput(localPlayer, deltaTime);
 
-                    // Also handle keyboard input (for desktop testing)
-                    if (IsKeyDown(KEY_W)) localPlayer->moveForward(deltaTime);
-                    if (IsKeyDown(KEY_S)) localPlayer->moveBackward(deltaTime);
-                    if (IsKeyDown(KEY_A)) localPlayer->moveLeft(deltaTime);
-                    if (IsKeyDown(KEY_D)) localPlayer->moveRight(deltaTime);
+                        // Also handle keyboard input (for desktop testing)
+                        if (IsKeyDown(KEY_W)) localPlayer->moveForward(deltaTime);
+                        if (IsKeyDown(KEY_S)) localPlayer->moveBackward(deltaTime);
+                        if (IsKeyDown(KEY_A)) localPlayer->moveLeft(deltaTime);
+                        if (IsKeyDown(KEY_D)) localPlayer->moveRight(deltaTime);
 
-                    // Update systems
-                    staminaSystem->update(deltaTime, state);
-                    sanitySystem->update(deltaTime, state, !state.flashlightOn, 100.0f);
+                        // Update systems (with null checks)
+                        if (staminaSystem) staminaSystem->update(deltaTime, state);
+                        if (sanitySystem) sanitySystem->update(deltaTime, state, !state.flashlightOn, 100.0f);
 
-                    Vector3 forward = computeForwardVector(state.rotation);
-                    flashlight->update(deltaTime, state.position, forward, state.battery);
-
-                    audioManager->updateGhostProximity(100.0f);
-                    audioManager->updateFootstepSounds(deltaTime, state);
-
-                    if (jumpscareSystem->checkDynamicTrigger(state, deltaTime, false, state.sanity)) {
-                        jumpscareSystem->triggerJumpscare(localId, state.position);
-                    }
-                    jumpscareSystem->update(deltaTime);
-
-                    fogSystem->update(deltaTime);
-
-                    client->sendPlayerMove(state);
-                }
-
-                // Spectator mode for dead players
-                if (localPlayer && localPlayer->getState().isDead) {
-                    std::vector<PlayerState> alivePlayers;
-                    const auto& allPlayers = game->getPlayers();
-                    for (const auto& [pid, player] : allPlayers) {
-                        if (!player->getState().isDead && !player->getState().isSpectator) {
-                            alivePlayers.push_back(player->getState());
+                        if (flashlight) {
+                            Vector3 forward = computeForwardVector(state.rotation);
+                            flashlight->update(deltaTime, state.position, forward, state.battery);
                         }
+
+                        if (audioManager) {
+                            audioManager->updateGhostProximity(100.0f);
+                            audioManager->updateFootstepSounds(deltaTime, state);
+                        }
+
+                        if (jumpscareSystem) {
+                            if (jumpscareSystem->checkDynamicTrigger(state, deltaTime, false, state.sanity)) {
+                                jumpscareSystem->triggerJumpscare(localId, state.position);
+                            }
+                            jumpscareSystem->update(deltaTime);
+                        }
+
+                        if (fogSystem) fogSystem->update(deltaTime);
+
+                        client->sendPlayerMove(state);
                     }
-                    spectatorSystem->update(deltaTime, alivePlayers);
+
+                    // Spectator mode for dead players
+                    if (localPlayer && localPlayer->getState().isDead && spectatorSystem) {
+                        std::vector<PlayerState> alivePlayers;
+                        const auto& allPlayers = game->getPlayers();
+                        for (const auto& [pid, player] : allPlayers) {
+                            if (!player->getState().isDead && !player->getState().isSpectator) {
+                                alivePlayers.push_back(player->getState());
+                            }
+                        }
+                        spectatorSystem->update(deltaTime, alivePlayers);
+                    }
+
+                    // Render
+                    renderer->beginFrame();
+                    if (localPlayer) {
+                        renderer->renderGame(*game, localPlayer->getState());
+                        renderer->renderHUD(localPlayer->getState());
+                        renderer->renderSanityEffects(localPlayer->getState().sanity);
+                    }
+
+                    if (localPlayer && jumpscareSystem) {
+                        const PlayerState& ps = localPlayer->getState();
+                        Camera3D camera = { 0 };
+                        camera.position = ps.position;
+                        camera.position.y += Kaikai::PLAYER_HEIGHT * 0.9f;
+                        Vector3 fwd = computeForwardVector(ps.rotation);
+                        camera.target = Vector3Add(camera.position, fwd);
+                        camera.up = { 0.0f, 1.0f, 0.0f };
+                        camera.fovy = 60.0f;
+                        camera.projection = CAMERA_PERSPECTIVE;
+                        jumpscareSystem->render(camera);
+                    }
+
+                    renderer->endFrame();
+
+                    // Draw Android touch controls overlay
+                    drawAndroidControls();
+
+                    // Update audio
+                    if (audioManager) audioManager->update(deltaTime);
+
+                } catch (...) {
+                    LOG_ERROR("Exception during game loop! Returning to menu.");
+                    // Safe cleanup and return to menu
+                    if (client) { client->disconnect(); delete client; client = nullptr; }
+                    delete game; game = nullptr;
+                    delete itemSpawnSystem; itemSpawnSystem = nullptr;
+                    delete spectatorSystem; spectatorSystem = nullptr;
+                    delete jumpscareSystem; jumpscareSystem = nullptr;
+                    delete sanitySystem; sanitySystem = nullptr;
+                    delete staminaSystem; staminaSystem = nullptr;
+                    delete fogSystem; fogSystem = nullptr;
+                    delete flashlight; flashlight = nullptr;
+                    if (audioManager) { audioManager->shutdown(); delete audioManager; audioManager = nullptr; }
+                    if (renderer) { renderer->shutdown(); delete renderer; renderer = nullptr; }
+
+                    appState = AppState::CONNECTION_FAILED;
+                    menuTime = 0.0f;
                 }
-
-                // Render
-                renderer->beginFrame();
-                if (localPlayer) {
-                    renderer->renderGame(*game, localPlayer->getState());
-                    renderer->renderHUD(localPlayer->getState());
-                    renderer->renderSanityEffects(localPlayer->getState().sanity);
-                }
-
-                if (localPlayer) {
-                    const PlayerState& ps = localPlayer->getState();
-                    Camera3D camera = { 0 };
-                    camera.position = ps.position;
-                    camera.position.y += Kaikai::PLAYER_HEIGHT * 0.9f;
-                    Vector3 fwd = computeForwardVector(ps.rotation);
-                    camera.target = Vector3Add(camera.position, fwd);
-                    camera.up = { 0.0f, 1.0f, 0.0f };
-                    camera.fovy = 60.0f;
-                    camera.projection = CAMERA_PERSPECTIVE;
-                    jumpscareSystem->render(camera);
-                }
-
-                renderer->endFrame();
-
-                // Draw Android touch controls overlay
-                drawAndroidControls();
-
-                // Update audio
-                audioManager->update(deltaTime);
                 break;
             }
 
@@ -769,7 +872,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Cleanup
+    // Cleanup (with null safety)
     if (client) { client->disconnect(); delete client; }
     if (audioManager) { audioManager->shutdown(); delete audioManager; }
     if (renderer) { renderer->shutdown(); delete renderer; }

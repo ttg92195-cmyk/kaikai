@@ -24,29 +24,41 @@ AudioManager::~AudioManager() {
 void AudioManager::init() {
     if (initialized) return;
 
+    // Try to initialize audio device - this may fail on some Android devices
     InitAudioDevice();
 
-    // Generate procedural sounds
-    Wave heartbeatWave = ProceduralAudio::generateHeartbeat(60.0f);
-    heartbeatSound = LoadSoundFromWave(heartbeatWave);
-    UnloadWave(heartbeatWave);
+    // Safety: check if audio device is ready
+    if (!IsAudioDeviceReady()) {
+        // Audio not available - game will run without sound
+        return;
+    }
 
-    Wave footstepWave = ProceduralAudio::generateFootstep();
-    footstepSound = LoadSoundFromWave(footstepWave);
-    UnloadWave(footstepWave);
+    try {
+        // Generate procedural sounds
+        Wave heartbeatWave = ProceduralAudio::generateHeartbeat(60.0f);
+        heartbeatSound = LoadSoundFromWave(heartbeatWave);
+        UnloadWave(heartbeatWave);
 
-    Wave doorWave = ProceduralAudio::generateDoorCreak();
-    doorSound = LoadSoundFromWave(doorWave);
-    UnloadWave(doorWave);
+        Wave footstepWave = ProceduralAudio::generateFootstep();
+        footstepSound = LoadSoundFromWave(footstepWave);
+        UnloadWave(footstepWave);
 
-    Wave ambientWave = ProceduralAudio::generateWind();
-    ambientSound = LoadSoundFromWave(ambientWave);
-    UnloadWave(ambientWave);
+        Wave doorWave = ProceduralAudio::generateDoorCreak();
+        doorSound = LoadSoundFromWave(doorWave);
+        UnloadWave(doorWave);
 
-    SetSoundVolume(heartbeatSound, 0.0f); // Start silent, controlled by ghost proximity
-    SetSoundVolume(footstepSound, 0.6f);
-    SetSoundVolume(doorSound, 0.5f);
-    SetSoundVolume(ambientSound, 0.3f);
+        Wave ambientWave = ProceduralAudio::generateWind();
+        ambientSound = LoadSoundFromWave(ambientWave);
+        UnloadWave(ambientWave);
+
+        SetSoundVolume(heartbeatSound, 0.0f); // Start silent, controlled by ghost proximity
+        SetSoundVolume(footstepSound, 0.6f);
+        SetSoundVolume(doorSound, 0.5f);
+        SetSoundVolume(ambientSound, 0.3f);
+    } catch (...) {
+        // Sound generation failed - not fatal, game runs without audio
+        return;
+    }
 
     initialized = true;
 }
