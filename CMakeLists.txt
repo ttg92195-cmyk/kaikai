@@ -10,31 +10,35 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ---------------------------------------------------------------------------
 # Dependencies
 # ---------------------------------------------------------------------------
-include(FetchContent)
 
 # ---- raylib ----------------------------------------------------------------
-# First try system package, then look for locally built raylib
-find_package(raylib QUIET 4.0)
+# Use system-installed raylib (apt: libraylib-dev)
+find_package(raylib QUIET)
 
 if(NOT raylib_FOUND)
-    # Check if raylib was built in _raylib directory (GitHub Actions checkout)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/_raylib/CMakeLists.txt")
-        message(STATUS "Found raylib source in _raylib/ - building alongside project")
-        set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-        set(BUILD_GAMES   OFF CACHE BOOL "" FORCE)
-        add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/_raylib raylib_build)
-    else()
-        message(STATUS "raylib not found - will attempt FetchContent download")
-        set(FETCHCONTENT_QUIET OFF)
-        FetchContent_Declare(
-            raylib
-            GIT_REPOSITORY https://github.com/raysan/raylib.git
-            GIT_TAG        5.5
-        )
-        set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-        set(BUILD_GAMES   OFF CACHE BOOL "" FORCE)
-        FetchContent_MakeAvailable(raylib)
+    # Fallback: try pkg-config (some distros install raylib without CMake config)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(RAYLIB QUIET raylib)
     endif()
+
+    if(RAYLIB_FOUND)
+        message(STATUS "raylib found via pkg-config: ${RAYLIB_VERSION}")
+        # Create an imported target from pkg-config results
+        add_library(raylib::raylib SHARED IMPORTED)
+        set_target_properties(raylib::raylib PROPERTIES
+            IMPORTED_LOCATION "${RAYLIB_LINK_LIBRARIES}"
+            INTERFACE_INCLUDE_DIRECTORIES "${RAYLIB_INCLUDE_DIRS}"
+        )
+    else()
+        message(FATAL_ERROR
+            "raylib NOT found! Install it with:\n"
+            "  sudo apt-get install libraylib-dev\n"
+            "Or build from source and install to /usr/local"
+        )
+    endif()
+else()
+    message(STATUS "raylib found via CMake config: ${raylib_VERSION}")
 endif()
 
 # ---- ENet ------------------------------------------------------------------
@@ -45,6 +49,7 @@ endif()
 
 if(NOT ENET_FOUND)
     message(STATUS "ENet not found locally - fetching via FetchContent")
+    include(FetchContent)
     FetchContent_Declare(
         enet
         GIT_REPOSITORY https://github.com/lsalzman/enet.git
@@ -102,7 +107,7 @@ file(GLOB_RECURSE KAIKAI_CLIENT_SOURCES
 set(KAIKAI_MAIN "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
 
 # ---------------------------------------------------------------------------
-# Server target (headless - no raylib needed for pure server)
+# Server target (headless - needs raylib for GetTime() but no window init)
 # ---------------------------------------------------------------------------
 add_executable(kaikai_server ${KAIKAI_SERVER_SOURCES} ${KAIKAI_MAIN})
 target_include_directories(kaikai_server PRIVATE
@@ -110,6 +115,7 @@ target_include_directories(kaikai_server PRIVATE
     ${ENET_INCLUDE_DIRS}
 )
 target_link_libraries(kaikai_server PRIVATE
+    raylib
     ${ENET_LIBRARIES}
     Threads::Threads
     m
