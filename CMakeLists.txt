@@ -191,6 +191,8 @@ if(ANDROID)
     # ---- native_app_glue (required by android.app.NativeActivity) -----------
     # native_app_glue provides ANativeActivity_onCreate and the app thread
     # that calls android_main (provided by raylib's platform_android code).
+    # We compile it as an OBJECT library so it's directly embedded in our .so,
+    # guaranteeing the ANativeActivity_onCreate entry point is exported.
     if(NOT ANDROID_NDK)
         if(DEFINED ENV{ANDROID_NDK_HOME})
             set(ANDROID_NDK $ENV{ANDROID_NDK_HOME})
@@ -203,23 +205,18 @@ if(ANDROID)
 
     message(STATUS "ANDROID_NDK path: ${ANDROID_NDK}")
 
-    # Compile native_app_glue directly from NDK source.
-    # NDK r26 still has the source at sources/android/native_app_glue/
-    # (raylib also compiles this same file internally, but we need our own copy
-    # to ensure ANativeActivity_onCreate is explicitly linked into our .so).
+    # Compile native_app_glue as OBJECT library (directly embedded in .so).
+    # Using OBJECT instead of STATIC ensures the linker MUST include the code,
+    # so ANativeActivity_onCreate is always present and exported.
     set(NAG_SRC "${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c")
     set(NAG_INC "${ANDROID_NDK}/sources/android/native_app_glue")
 
     if(EXISTS "${NAG_SRC}")
         message(STATUS "Compiling native_app_glue from NDK source: ${NAG_SRC}")
-        add_library(kaikai_native_app_glue STATIC ${NAG_SRC})
+        add_library(kaikai_native_app_glue OBJECT ${NAG_SRC})
         target_include_directories(kaikai_native_app_glue PUBLIC ${NAG_INC})
     else()
-        # Fallback: NDK r28+ may move the source; try find_package as last resort
-        message(STATUS "native_app_glue source not found at ${NAG_SRC}, trying find_package")
-        set(native_app_glue_DIR "${ANDROID_NDK}/build/cmake")
-        find_package(native_app_glue REQUIRED CONFIG)
-        add_library(kaikai_native_app_glue ALIAS native_app_glue::native_app_glue)
+        message(FATAL_ERROR "native_app_glue source not found at ${NAG_SRC}")
     endif()
 
     # ---- ENet for Android (include sources directly in shared library) ------
@@ -251,18 +248,25 @@ if(ANDROID)
         ${KAIKAI_CLIENT_SOURCES}
         ${KAIKAI_MAIN}
         ${ENET_ANDROID_SOURCES}
+        $<TARGET_OBJECTS:kaikai_native_app_glue>
     )
     target_include_directories(kaikai_android PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${enet_android_SOURCE_DIR}/include
+        ${NAG_INC}
     )
     target_compile_definitions(kaikai_android PRIVATE
         KAIKAI_CLIENT
         HAS_SOCKLEN_T=1
     )
+
+    # Link raylib with --whole-archive to ensure ALL symbols from libraylib.a
+    # are included in the .so, including android_main and platform code.
+    # Without this, the linker may skip unreferenced objects like native_app_glue.
     target_link_libraries(kaikai_android PRIVATE
+        -Wl,--whole-archive
         raylib::raylib
-        kaikai_native_app_glue
+        -Wl,--no-whole-archive
         Threads::Threads
         android
         log
@@ -272,9 +276,8 @@ if(ANDROID)
         m
     )
 
-    # Allow multiple definitions because both raylib and our native_app_glue
-    # define ANativeActivity_onCreate (raylib includes it internally).
-    # Our explicit link ensures the symbol is always present in the .so.
+    # Allow multiple definitions because both raylib (via --whole-archive) and
+    # our OBJECT-compiled native_app_glue define ANativeActivity_onCreate.
     set_target_properties(kaikai_android PROPERTIES
         LINK_FLAGS "-Wl,--allow-multiple-definition"
     )
